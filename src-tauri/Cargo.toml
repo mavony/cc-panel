@@ -1,0 +1,22 @@
+[package]
+name = "cc_panel"
+version = "0.1.0"
+description = "Usage & agent session monitor for Claude Code / Codex"
+authors = ["yangxuefeng"]
+edition = "2021"
+
+[lib]
+name = "cc_panel_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon", "image-png"] }
+tauri-plugin-opener = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+reqwest = { version = "0.12", features = ["json"] }
+dirs = "6"
+tauri-plugin-notification = "2.3.3"
