@@ -130,15 +130,6 @@ fn handle_conn(stream: UnixStream, app: tauri::AppHandle) {
         return reply(stream, "");
     };
 
-    // 面板窗口不可见时不拦截：用户在终端工作，走原生提示零延迟
-    let visible = app
-        .get_webview_window("main")
-        .and_then(|w| w.is_visible().ok())
-        .unwrap_or(false);
-    if !visible {
-        return reply(stream, "");
-    }
-
     // 校验请求来自真实的 Claude 会话，防伪造请求骗取 allow
     let transcript = req
         .get("transcript_path")
@@ -163,6 +154,26 @@ fn handle_conn(stream: UnixStream, app: tauri::AppHandle) {
     let tool_input = req.get("tool_input").cloned().unwrap_or(Value::Null);
     let cwd = req.get("cwd").and_then(Value::as_str).unwrap_or("");
     if allowlisted(tool_name, &tool_input, cwd) {
+        return reply(stream, "");
+    }
+
+    // 面板窗口不可见时不拦截：用户在终端工作，走原生提示零延迟。
+    // 但确认请求本身是准确信号，补发系统通知防止挂起无人知晓；
+    // key 与 jsonl 链路的 waiting 通知共用，同一停顿不重复打扰
+    let visible = app
+        .get_webview_window("main")
+        .and_then(|w| w.is_visible().ok())
+        .unwrap_or(false);
+    if !visible {
+        if crate::load_panel_settings().notify_confirm {
+            crate::notify_dedup(
+                &app,
+                format!("waiting:{transcript}"),
+                "等待权限确认（CC Panel）",
+                &format!("{}: {}", tool_name, summarize(tool_name, &tool_input)),
+                Some(transcript),
+            );
+        }
         return reply(stream, "");
     }
 

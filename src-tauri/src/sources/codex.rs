@@ -87,7 +87,7 @@ pub fn proxy_host() -> Option<String> {
     Some(provider)
 }
 
-fn recent_files(max_age_secs: u64) -> Vec<(PathBuf, u64)> {
+pub(crate) fn recent_files(max_age_secs: u64) -> Vec<(PathBuf, u64)> {
     let Some(root) = sessions_dir() else {
         return Vec::new();
     };

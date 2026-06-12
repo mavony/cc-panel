@@ -1,5 +1,6 @@
 mod confirm;
 mod models;
+mod resume;
 mod sources;
 
 use models::{ProviderUsage, SessionDetail};
@@ -52,13 +53,15 @@ async fn get_usage() -> Vec<ProviderUsage> {
 }
 
 /// 面板自有设置（~/.cc_panel/settings.json，与 ~/.claude 无关）
-#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase", default)]
 pub struct PanelSettings {
     /// 出现待确认时发系统通知
     pub notify_confirm: bool,
     /// 会话结束时发系统通知
     pub notify_done: bool,
+    /// 恢复会话使用的终端 App："Terminal" | "iTerm"
+    pub terminal_app: String,
 }
 
 impl Default for PanelSettings {
@@ -66,6 +69,7 @@ impl Default for PanelSettings {
         Self {
             notify_confirm: true,
             notify_done: true,
+            terminal_app: "Terminal".into(),
         }
     }
 }
@@ -187,6 +191,39 @@ fn set_confirm_hook(enabled: bool) -> Result<bool, String> {
     confirm::set_hook(enabled)
 }
 
+/// 在终端中恢复会话（claude --resume / codex resume）。
+/// file_path 必须是已知数据源目录下真实存在的会话文件。
+#[tauri::command]
+fn resume_session(file_path: String) -> Result<(), String> {
+    resume::resume_in_terminal(&file_path)
+}
+
+/// 会话管理页：分页列出全部历史会话（列表阶段只解析文件头部）
+#[tauri::command]
+async fn list_history_sessions(
+    offset: usize,
+    limit: usize,
+    keyword: Option<String>,
+    provider: Option<String>,
+) -> Vec<sources::history::HistorySession> {
+    tauri::async_runtime::spawn_blocking(move || {
+        sources::history::list(offset, limit.min(200), keyword.as_deref(), provider.as_deref())
+    })
+    .await
+    .unwrap_or_default()
+}
+
+/// 会话管理页：提取单个会话的对话消息（最近 max 条）
+#[tauri::command]
+async fn get_session_messages(
+    file_path: String,
+    max: usize,
+) -> Result<Vec<sources::history::ChatMessage>, String> {
+    tauri::async_runtime::spawn_blocking(move || sources::history::messages(&file_path, max.min(500)))
+        .await
+        .map_err(|_| "解析会话失败".to_string())?
+}
+
 /// 在 Finder 中显示文件/目录。只接受真实存在的绝对路径。
 #[tauri::command]
 fn reveal_path(path: String) -> Result<(), String> {
@@ -214,6 +251,25 @@ pub fn debug_scan_codex() -> Vec<serde_json::Value> {
 
 pub fn debug_codex_usage() -> serde_json::Value {
     serde_json::to_value(sources::codex::usage()).unwrap_or_default()
+}
+
+pub fn debug_resume_cmd(file_path: &str) -> Result<String, String> {
+    resume::build_shell_cmd(file_path)
+}
+
+pub fn debug_history_list(
+    offset: usize,
+    limit: usize,
+    keyword: Option<&str>,
+) -> Vec<sources::history::HistorySession> {
+    sources::history::list(offset, limit, keyword, None)
+}
+
+pub fn debug_history_messages(
+    file_path: &str,
+    max: usize,
+) -> Result<Vec<sources::history::ChatMessage>, String> {
+    sources::history::messages(file_path, max)
 }
 
 /// 后台循环：刷新 tray 计数 + 状态变化通知（新 waiting / running→recent）
@@ -294,6 +350,9 @@ pub fn run() {
             list_sessions,
             get_usage,
             reveal_path,
+            resume_session,
+            list_history_sessions,
+            get_session_messages,
             list_pending_confirms,
             resolve_confirm,
             confirm_hook_status,

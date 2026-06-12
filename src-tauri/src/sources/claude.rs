@@ -131,6 +131,11 @@ fn parse_session(path: &Path, status: &str, age_secs: u64) -> Option<SessionDeta
     // 解析完仍有剩余说明会话正停在确认提示上
     let mut pending_interactive: std::collections::HashMap<String, String> =
         std::collections::HashMap::new();
+    // 已发出但还没有 tool_result 的权限类工具调用（id → 描述）。
+    // 权限确认在 jsonl 里只是普通 tool_use，无等待标记，只能结合文件静默时长推断：
+    // 编辑类工具执行近乎瞬时，静默超 30s 基本就是停在权限提示上；
+    // Bash 可能本身长时间运行，放宽到 90s（长命令会误报一次"可能在等待"，可接受）
+    let mut pending_permission: Vec<(String, String, bool)> = Vec::new();
 
     for line in reader.lines() {
         let Ok(line) = line else { continue };
@@ -180,6 +185,7 @@ fn parse_session(path: &Path, status: &str, age_secs: u64) -> Option<SessionDeta
                         if block.get("type").and_then(Value::as_str) == Some("tool_result") {
                             if let Some(id) = block.get("tool_use_id").and_then(Value::as_str) {
                                 pending_interactive.remove(id);
+                                pending_permission.retain(|(pid, _, _)| pid != id);
                             }
                         }
                     }
@@ -244,6 +250,22 @@ fn parse_session(path: &Path, status: &str, age_secs: u64) -> Option<SessionDeta
                                             outputs.push(fp.to_string());
                                         }
                                     }
+                                    if let Some(id) = block.get("id").and_then(Value::as_str) {
+                                        pending_permission.push((
+                                            id.to_string(),
+                                            describe_tool(name, input),
+                                            false,
+                                        ));
+                                    }
+                                }
+                                "Bash" => {
+                                    if let Some(id) = block.get("id").and_then(Value::as_str) {
+                                        pending_permission.push((
+                                            id.to_string(),
+                                            describe_tool(name, input),
+                                            true,
+                                        ));
+                                    }
                                 }
                                 _ => {}
                             }
@@ -262,8 +284,20 @@ fn parse_session(path: &Path, status: &str, age_secs: u64) -> Option<SessionDeta
         .or(first_user_text)
         .unwrap_or_else(|| project_name(&project_path));
 
-    // 还有未回应的交互工具调用 → 会话停在确认提示上
-    let pending_question = pending_interactive.into_values().next();
+    // 还有未回应的交互工具调用 → 会话停在确认提示上；
+    // 否则若有未回应的权限类调用且文件静默超阈值 → 大概率停在权限提示上
+    const EDIT_PERMISSION_WAIT_SECS: u64 = 30;
+    const BASH_PERMISSION_WAIT_SECS: u64 = 90;
+    let pending_question = pending_interactive.into_values().next().or_else(|| {
+        pending_permission.last().and_then(|(_, desc, is_bash)| {
+            let threshold = if *is_bash {
+                BASH_PERMISSION_WAIT_SECS
+            } else {
+                EDIT_PERMISSION_WAIT_SECS
+            };
+            (age_secs >= threshold).then(|| format!("可能在等待权限确认 — {desc}"))
+        })
+    });
     let status = if pending_question.is_some() {
         "waiting"
     } else {
@@ -312,7 +346,7 @@ fn record_common_fields(
     }
 }
 
-fn describe_tool(name: &str, input: &Value) -> String {
+pub(crate) fn describe_tool(name: &str, input: &Value) -> String {
     let target = match name {
         "Write" | "Edit" | "MultiEdit" | "Read" => input
             .get("file_path")

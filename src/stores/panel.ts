@@ -2,7 +2,14 @@ import { invoke } from "@tauri-apps/api/core";
 import { defineStore } from "pinia";
 import { computed, shallowRef } from "vue";
 
-import type { PanelSettings, PendingConfirm, ProviderUsage, SessionDetail } from "../types";
+import type {
+  ChatMessage,
+  HistorySession,
+  PanelSettings,
+  PendingConfirm,
+  ProviderUsage,
+  SessionDetail,
+} from "../types";
 
 const SESSIONS_POLL_MS = 5000;
 const USAGE_POLL_MS = 60000;
@@ -15,7 +22,12 @@ export const usePanelStore = defineStore("panel", () => {
   const lastSyncAt = shallowRef<number | null>(null);
   const pendingConfirms = shallowRef<PendingConfirm[]>([]);
   const confirmHookEnabled = shallowRef(false);
-  const panelSettings = shallowRef<PanelSettings>({ notifyConfirm: true, notifyDone: true });
+  const panelSettings = shallowRef<PanelSettings>({
+    notifyConfirm: true,
+    notifyDone: true,
+    terminalApp: "Terminal",
+  });
+  const resumeError = shallowRef<string | null>(null);
 
   const runningCount = computed(
     () => sessions.value.filter((s) => s.status === "running").length,
@@ -116,6 +128,44 @@ export const usePanelStore = defineStore("panel", () => {
     }
   }
 
+  /** 在终端中恢复会话，失败时把原因放进 resumeError 供 UI 展示 */
+  async function resumeSession(filePath: string) {
+    resumeError.value = null;
+    try {
+      await invoke("resume_session", { filePath });
+    } catch (e) {
+      resumeError.value = String(e);
+    }
+  }
+
+  /** 会话管理页：分页拉取历史会话 */
+  async function fetchHistorySessions(
+    offset: number,
+    limit: number,
+    keyword: string,
+    provider: "" | "claude" | "codex",
+  ): Promise<HistorySession[]> {
+    try {
+      return await invoke<HistorySession[]>("list_history_sessions", {
+        offset,
+        limit,
+        keyword: keyword || null,
+        provider: provider || null,
+      });
+    } catch {
+      return [];
+    }
+  }
+
+  /** 会话管理页：拉取单个会话的对话消息 */
+  async function fetchSessionMessages(filePath: string, max = 200): Promise<ChatMessage[]> {
+    try {
+      return await invoke<ChatMessage[]>("get_session_messages", { filePath, max });
+    } catch {
+      return [];
+    }
+  }
+
   return {
     sessions,
     usages,
@@ -133,5 +183,9 @@ export const usePanelStore = defineStore("panel", () => {
     setConfirmHook,
     startPolling,
     revealPath,
+    resumeError,
+    resumeSession,
+    fetchHistorySessions,
+    fetchSessionMessages,
   };
 });

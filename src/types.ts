@@ -28,10 +28,33 @@ export interface SessionDetail {
   gitBranch: string | null;
 }
 
+/** 会话管理页的历史会话条目 */
+export interface HistorySession {
+  /** jsonl 文件绝对路径，同时作为会话的稳定标识 */
+  filePath: string;
+  provider: Provider;
+  title: string;
+  projectPath: string;
+  /** epoch 毫秒 */
+  lastActivityAt: number;
+  /** 正在进行中（恢复按钮置灰） */
+  isActive: boolean;
+}
+
+/** 会话管理页的对话消息 */
+export interface ChatMessage {
+  role: "user" | "assistant" | "tool";
+  text: string;
+  /** ISO 时间戳 */
+  at: string | null;
+}
+
 /** 面板自有设置（~/.cc_panel/settings.json） */
 export interface PanelSettings {
   notifyConfirm: boolean;
   notifyDone: boolean;
+  /** 恢复会话使用的终端 App */
+  terminalApp: "Terminal" | "iTerm";
 }
 
 /** 来自 PreToolUse hook 的待确认工具权限请求 */
