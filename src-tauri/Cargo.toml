@@ -1,6 +1,6 @@
 [package]
 name = "cc_panel"
-version = "0.1.2"
+version = "0.1.3"
 description = "Usage & agent session monitor for Claude Code / Codex"
 authors = ["yangxuefeng"]
 edition = "2021"

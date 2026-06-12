@@ -33,15 +33,28 @@ If you run multiple Claude Code / Codex sessions, you know the pain:
 ### ⏸ Stop waiting on sessions — get notified
 
 - When a session stops at a permission prompt / question / plan approval: an orange "waiting" badge pins it to the top, the menu bar shows a `⏸ n` counter, and a system notification (with sound) fires
+- Permission prompts are caught on two paths: instantly via the PreToolUse hook, or by a transcript heuristic (~30s for edits / ~90s for Bash) when the hook isn't active — so a stuck session never goes silent
 - Session-finished notifications too (based on ~2 minutes of inactivity)
-- Per-session dedup within 10 minutes; two independent toggles in settings (⚙)
+- Dedup is per prompt (10 minutes), so multiple confirmations in one session each notify; toggles live in Settings
 
 ### ✅ Approve without switching terminals
 
 - Via Claude Code's official PreToolUse hook, tool permission prompts appear right in the panel — click Allow / Deny and it takes effect
-- Falls back to the native terminal prompt after 45 seconds of no action; completely transparent when the panel is closed
+- Falls back to the native terminal prompt when unhandled (configurable 10–300s, default 45s; hook timeouts are kept in sync automatically); completely transparent when the panel is closed
 - Safety gates: pass-through when the panel window is hidden (zero latency), session path validation, special permission modes respected, allowlisted commands skipped — **on any error it only falls back to the terminal, never auto-approves**
 - One-click hook install/uninstall in settings (backs up `~/.claude/settings.json` before writing)
+
+### 🗂 Session manager
+
+- Browse and search **all** historical Claude Code / Codex sessions (title / project, provider filter, paginated)
+- Read the full conversation of any session, then resume it in your terminal (`claude --resume` / `codex resume`) or open its project folder
+- Delete old sessions — two-step confirm, moved to Trash (recoverable); active sessions are protected server-side
+
+### ⚙️ A real settings page
+
+- Theme: dark / light / follow system
+- Language: 中文 / English (UI and system notifications)
+- Launch at login, notification sound toggle, panel-confirmation timeout, preferred terminal (Terminal / iTerm2)
 
 ### 🔒 Security by design
 
@@ -57,7 +70,7 @@ Download the DMG from [Releases](https://github.com/mavony/cc-panel/releases) an
 - Apple Silicon: `CC Panel_x.y.z_aarch64.dmg`
 - Intel: `CC Panel_x.y.z_x64.dmg`
 
-To enable in-panel approval: open the panel → ⚙ (top right) → check "Confirm tool permissions in panel" → takes effect for newly started Claude Code sessions.
+To enable in-panel approval: open the panel → ⚙ (top right) → Settings → check "Confirm tool permissions in panel" → takes effect for newly started Claude Code sessions.
 
 ## Development
 
