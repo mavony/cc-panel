@@ -31,19 +31,19 @@ const hiddenOutputCount = computed(
   <div class="detail">
     <section v-if="session.todos.length" class="block">
       <h3 class="block-title">
-        进度
+        {{ $t("sessions.progress") }}
         <span class="block-count">{{ doneCount }}/{{ session.todos.length }}</span>
       </h3>
       <TodoChecklist :todos="session.todos" />
     </section>
 
     <section v-if="session.latestMessage" class="block">
-      <h3 class="block-title">最新动态</h3>
+      <h3 class="block-title">{{ $t("sessions.latest") }}</h3>
       <p class="message">{{ session.latestMessage }}</p>
     </section>
 
     <section v-if="session.outputs.length" class="block">
-      <h3 class="block-title">输出 <span class="block-count">{{ session.outputs.length }}</span></h3>
+      <h3 class="block-title">{{ $t("sessions.outputs") }} <span class="block-count">{{ session.outputs.length }}</span></h3>
       <ul class="outputs">
         <li v-for="path in visibleOutputs" :key="path">
           <button class="output-item" :title="path" @click="$emit('reveal', path)">
@@ -57,19 +57,19 @@ const hiddenOutputCount = computed(
         class="outputs-toggle"
         @click="outputsExpanded = !outputsExpanded"
       >
-        {{ outputsExpanded ? "收起" : `展开全部（还有 ${hiddenOutputCount} 个）` }}
+        {{ outputsExpanded ? $t("sessions.collapse") : $t("sessions.expandAll", { n: hiddenOutputCount }) }}
       </button>
     </section>
 
     <footer class="foot">
-      <span class="foot-meta">{{ session.messageCount }} 条消息</span>
+      <span class="foot-meta">{{ $t("sessions.msgCount", { n: session.messageCount }) }}</span>
       <span v-if="session.gitBranch" class="foot-meta">{{ session.gitBranch }}</span>
       <button
         v-if="session.projectPath"
         class="foot-link"
         @click="$emit('reveal', session.projectPath)"
       >
-        打开项目目录
+        {{ $t("sessions.openProject") }}
       </button>
     </footer>
   </div>
@@ -77,7 +77,7 @@ const hiddenOutputCount = computed(
 
 <style scoped>
 .detail {
-  border-top: 1px solid #262c36;
+  border-top: 1px solid var(--border);
   padding: 12px;
   display: flex;
   flex-direction: column;
@@ -94,7 +94,7 @@ const hiddenOutputCount = computed(
   margin: 0;
   font-size: 11px;
   font-weight: 600;
-  color: #8b93a1;
+  color: var(--text-dim);
   display: flex;
   align-items: center;
   gap: 6px;
@@ -102,14 +102,14 @@ const hiddenOutputCount = computed(
 
 .block-count {
   font-weight: 400;
-  color: #5c6470;
+  color: var(--text-faint);
 }
 
 .message {
   margin: 0;
   font-size: 12px;
-  color: #b8bfc9;
-  background: #11141a;
+  color: var(--text-mid);
+  background: var(--surface-deep);
   border-radius: 8px;
   padding: 8px 10px;
   white-space: pre-wrap;
@@ -132,7 +132,7 @@ const hiddenOutputCount = computed(
   width: 100%;
   background: none;
   border: none;
-  color: #b8bfc9;
+  color: var(--text-mid);
   font: inherit;
   font-size: 12px;
   padding: 4px 6px;
@@ -142,8 +142,8 @@ const hiddenOutputCount = computed(
 }
 
 .output-item:hover {
-  background: #1d222b;
-  color: #e6e9ee;
+  background: var(--surface-hover);
+  color: var(--text);
 }
 
 .output-icon {
@@ -160,7 +160,7 @@ const hiddenOutputCount = computed(
   align-self: flex-start;
   background: none;
   border: none;
-  color: #6ea8fe;
+  color: var(--accent-text);
   font-size: 11px;
   cursor: pointer;
   padding: 2px 6px;
@@ -174,20 +174,20 @@ const hiddenOutputCount = computed(
   display: flex;
   align-items: center;
   gap: 10px;
-  border-top: 1px solid #1d222b;
+  border-top: 1px solid var(--surface-hover);
   padding-top: 10px;
 }
 
 .foot-meta {
   font-size: 11px;
-  color: #5c6470;
+  color: var(--text-faint);
 }
 
 .foot-link {
   margin-left: auto;
   background: none;
   border: none;
-  color: #6ea8fe;
+  color: var(--accent-text);
   font-size: 11px;
   cursor: pointer;
   padding: 0;

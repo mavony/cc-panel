@@ -19,14 +19,14 @@ fn is_uuid(s: &str) -> bool {
 pub(crate) fn parse_target(file_path: &str) -> Result<(&'static str, String), String> {
     let path = Path::new(file_path)
         .canonicalize()
-        .map_err(|_| "会话文件不存在")?;
+        .map_err(|_| crate::tr_rt("会话文件不存在", "Session file not found"))?;
     if path.extension().and_then(|e| e.to_str()) != Some("jsonl") {
-        return Err("不是会话文件".into());
+        return Err(crate::tr_rt("不是会话文件", "Not a session file").into());
     }
     let stem = path
         .file_stem()
         .and_then(|s| s.to_str())
-        .ok_or("无法解析文件名")?;
+        .ok_or(crate::tr_rt("无法解析文件名", "Cannot parse file name"))?;
 
     let under = |root: Option<PathBuf>| {
         root.and_then(|r| r.canonicalize().ok())
@@ -47,7 +47,7 @@ pub(crate) fn parse_target(file_path: &str) -> Result<(&'static str, String), St
             }
         }
     }
-    Err("不在已知会话目录中".into())
+    Err(crate::tr_rt("不在已知会话目录中", "Not in a known session directory").into())
 }
 
 /// 从会话文件头部找项目目录（Claude 顶层 cwd / Codex session_meta payload.cwd）
@@ -83,9 +83,9 @@ fn applescript_quote(s: &str) -> String {
 pub fn build_shell_cmd(file_path: &str) -> Result<String, String> {
     let (provider, session_id) = parse_target(file_path)?;
 
-    let dir = session_cwd(file_path).ok_or("会话文件中没有项目目录信息")?;
+    let dir = session_cwd(file_path).ok_or(crate::tr_rt("会话文件中没有项目目录信息", "No project directory recorded in the session"))?;
     if !Path::new(&dir).is_dir() {
-        return Err(format!("项目目录已不存在：{dir}"));
+        return Err(format!("{}{dir}", crate::tr_rt("项目目录已不存在：", "Project directory no longer exists: ")));
     }
 
     let resume_cmd = match provider {
@@ -122,12 +122,12 @@ end tell"#
         .arg("-e")
         .arg(&script)
         .output()
-        .map_err(|e| format!("无法调用 osascript: {e}"))?;
+        .map_err(|e| format!("{}{e}", crate::tr_rt("无法调用 osascript: ", "Failed to invoke osascript: ")))?;
     if out.status.success() {
         Ok(())
     } else {
         let err = String::from_utf8_lossy(&out.stderr);
-        Err(format!("打开终端失败：{}", err.trim()))
+        Err(format!("{}{}", crate::tr_rt("打开终端失败：", "Failed to open terminal: "), err.trim()))
     }
 }
 

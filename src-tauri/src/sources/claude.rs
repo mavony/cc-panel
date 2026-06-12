@@ -23,6 +23,7 @@ pub fn scan_sessions() -> Vec<SessionDetail> {
     let Ok(project_dirs) = fs::read_dir(&root) else {
         return Vec::new();
     };
+    let en = crate::load_panel_settings().language == "en";
     for dir in project_dirs.flatten() {
         let Ok(files) = fs::read_dir(dir.path()) else {
             continue;
@@ -38,7 +39,7 @@ pub fn scan_sessions() -> Vec<SessionDetail> {
             let Some(status) = status_for_age(age) else {
                 continue;
             };
-            if let Some(detail) = parse_session(&path, status, age) {
+            if let Some(detail) = parse_session(&path, status, age, en) {
                 // 跳过隐藏目录中的会话（如 claude-mem 等插件的后台 agent），它们不是用户自己的任务
                 if detail.summary.project_path.contains("/.") {
                     continue;
@@ -52,11 +53,12 @@ pub fn scan_sessions() -> Vec<SessionDetail> {
 
 struct TaskListBuilder {
     tasks: Vec<TodoItem>,
+    en: bool,
 }
 
 impl TaskListBuilder {
-    fn new() -> Self {
-        Self { tasks: Vec::new() }
+    fn new(en: bool) -> Self {
+        Self { tasks: Vec::new(), en }
     }
 
     /// TaskCreate 的 taskId 按创建顺序从 "1" 递增分配
@@ -64,7 +66,7 @@ impl TaskListBuilder {
         let subject = input
             .get("subject")
             .and_then(Value::as_str)
-            .unwrap_or("(未命名任务)");
+            .unwrap_or(crate::tr(self.en, "(未命名任务)", "(untitled task)"));
         self.tasks.push(TodoItem {
             content: subject.to_string(),
             status: "pending".into(),
@@ -113,7 +115,7 @@ impl TaskListBuilder {
     }
 }
 
-fn parse_session(path: &Path, status: &str, age_secs: u64) -> Option<SessionDetail> {
+fn parse_session(path: &Path, status: &str, age_secs: u64, en: bool) -> Option<SessionDetail> {
     let file = fs::File::open(path).ok()?;
     let reader = BufReader::new(file);
 
@@ -125,11 +127,11 @@ fn parse_session(path: &Path, status: &str, age_secs: u64) -> Option<SessionDeta
     let mut latest_message = String::new();
     let mut current_activity = String::new();
     let mut outputs: Vec<String> = Vec::new();
-    let mut tasks = TaskListBuilder::new();
+    let mut tasks = TaskListBuilder::new(en);
     let mut first_user_text: Option<String> = None;
-    // 已发出但还没有 tool_result 的交互工具调用（id → 问题摘要），
+    // 已发出但还没有 tool_result 的交互工具调用（id → (语言无关 key, 展示文案)），
     // 解析完仍有剩余说明会话正停在确认提示上
-    let mut pending_interactive: std::collections::HashMap<String, String> =
+    let mut pending_interactive: std::collections::HashMap<String, (String, String)> =
         std::collections::HashMap::new();
     // 已发出但还没有 tool_result 的权限类工具调用（id → 描述）。
     // 权限确认在 jsonl 里只是普通 tool_use，无等待标记，只能结合文件静默时长推断：
@@ -207,7 +209,7 @@ fn parse_session(path: &Path, status: &str, age_secs: u64) -> Option<SessionDeta
                             if let Some(text) = block.get("text").and_then(Value::as_str) {
                                 if !text.trim().is_empty() {
                                     latest_message = truncate_chars(text, 200);
-                                    current_activity = "正在回复".into();
+                                    current_activity = crate::tr(en, "正在回复", "Replying").into();
                                 }
                             }
                         }
@@ -215,7 +217,7 @@ fn parse_session(path: &Path, status: &str, age_secs: u64) -> Option<SessionDeta
                             let name = block
                                 .get("name")
                                 .and_then(Value::as_str)
-                                .unwrap_or("(工具)");
+                                .unwrap_or(crate::tr(en, "(工具)", "(tool)"));
                             let input = block.get("input").unwrap_or(&Value::Null);
                             match name {
                                 "AskUserQuestion" => {
@@ -225,16 +227,31 @@ fn parse_session(path: &Path, status: &str, age_secs: u64) -> Option<SessionDeta
                                             .and_then(Value::as_array)
                                             .and_then(|qs| qs.first())
                                             .and_then(|q| q.get("question"))
-                                            .and_then(Value::as_str)
-                                            .unwrap_or("等待选择");
-                                        pending_interactive
-                                            .insert(id.to_string(), truncate_chars(q, 80));
+                                            .and_then(Value::as_str);
+                                        let display = q.map(|q| truncate_chars(q, 80)).unwrap_or_else(
+                                            || crate::tr(en, "等待选择", "Waiting for choice").into(),
+                                        );
+                                        // key 取模型原文（与语言设置无关），缺省用固定标识
+                                        let key = q
+                                            .map(|q| truncate_chars(q, 80))
+                                            .unwrap_or_else(|| "askuser".into());
+                                        pending_interactive.insert(id.to_string(), (key, display));
                                     }
                                 }
                                 "ExitPlanMode" => {
                                     if let Some(id) = block.get("id").and_then(Value::as_str) {
-                                        pending_interactive
-                                            .insert(id.to_string(), "等待批准实施计划".into());
+                                        pending_interactive.insert(
+                                            id.to_string(),
+                                            (
+                                                "planapproval".into(),
+                                                crate::tr(
+                                                    en,
+                                                    "等待批准实施计划",
+                                                    "Waiting for plan approval",
+                                                )
+                                                .into(),
+                                            ),
+                                        );
                                     }
                                 }
                                 "TaskCreate" => tasks.on_create(input),
@@ -285,19 +302,32 @@ fn parse_session(path: &Path, status: &str, age_secs: u64) -> Option<SessionDeta
         .unwrap_or_else(|| project_name(&project_path));
 
     // 还有未回应的交互工具调用 → 会话停在确认提示上；
-    // 否则若有未回应的权限类调用且文件静默超阈值 → 大概率停在权限提示上
+    // 否则若有未回应的权限类调用且文件静默超阈值 → 大概率停在权限提示上。
+    // pending_key 语言无关（permwait:{desc} 与 confirm.rs 的 hook 链路约定一致）
     const EDIT_PERMISSION_WAIT_SECS: u64 = 30;
     const BASH_PERMISSION_WAIT_SECS: u64 = 90;
-    let pending_question = pending_interactive.into_values().next().or_else(|| {
+    let pending = pending_interactive.into_values().next().or_else(|| {
         pending_permission.last().and_then(|(_, desc, is_bash)| {
             let threshold = if *is_bash {
                 BASH_PERMISSION_WAIT_SECS
             } else {
                 EDIT_PERMISSION_WAIT_SECS
             };
-            (age_secs >= threshold).then(|| format!("可能在等待权限确认 — {desc}"))
+            (age_secs >= threshold).then(|| {
+                (
+                    format!("permwait:{desc}"),
+                    format!(
+                        "{} — {desc}",
+                        crate::tr(en, "可能在等待权限确认", "Possibly waiting for permission")
+                    ),
+                )
+            })
         })
     });
+    let (pending_key, pending_question) = match pending {
+        Some((k, q)) => (Some(k), Some(q)),
+        None => (None, None),
+    };
     let status = if pending_question.is_some() {
         "waiting"
     } else {
@@ -315,6 +345,7 @@ fn parse_session(path: &Path, status: &str, age_secs: u64) -> Option<SessionDeta
         message_count,
         current_activity,
         pending_question,
+        pending_key,
     };
     Some(SessionDetail {
         summary,

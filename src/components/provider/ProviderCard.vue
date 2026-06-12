@@ -24,7 +24,7 @@ const shortModel = computed(() => {
 
 function barColor(percent: number): string {
   if (percent >= 90) return "#e5484d";
-  if (percent >= 70) return "#f5a623";
+  if (percent >= 70) return "var(--warn)";
   return meta.value.color;
 }
 </script>
@@ -34,7 +34,7 @@ function barColor(percent: number): string {
     <header class="card-head">
       <span class="dot" :style="{ backgroundColor: meta.color }" />
       <span class="name">{{ meta.name }}</span>
-      <span v-if="usage.source === 'proxy'" class="badge badge-proxy">第三方</span>
+      <span v-if="usage.source === 'proxy'" class="badge badge-proxy">{{ $t("usage.thirdParty") }}</span>
       <span class="spacer" />
       <span
         v-if="shortModel"
@@ -46,7 +46,7 @@ function barColor(percent: number): string {
 
     <template v-if="usage.source === 'proxy'">
       <p class="proxy-host" :title="usage.proxyHost ?? undefined">{{ usage.proxyHost }}</p>
-      <p class="proxy-note">第三方代理，无官方额度数据</p>
+      <p class="proxy-note">{{ $t("usage.proxyNote") }}</p>
     </template>
 
     <template v-else-if="usage.ok">
@@ -68,16 +68,16 @@ function barColor(percent: number): string {
           {{ formatResetAt(w.resetsAt, now) }}
         </p>
       </div>
-      <p class="fetched">{{ formatRelative(usage.fetchedAt, now) }}更新</p>
+      <p class="fetched">{{ $t("usage.updated", { t: formatRelative(usage.fetchedAt, now) }) }}</p>
     </template>
-    <p v-else class="error">{{ usage.error ?? "额度获取失败" }}</p>
+    <p v-else class="error">{{ usage.error ?? $t("usage.fetchError") }}</p>
   </article>
 </template>
 
 <style scoped>
 .card {
-  background: #171b22;
-  border: 1px solid #262c36;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 14px;
   padding: 12px;
   display: flex;
@@ -117,15 +117,15 @@ function barColor(percent: number): string {
 }
 
 .badge-proxy {
-  color: #f5a623;
-  border: 1px solid #4a3a1d;
-  background: #2a2113;
+  color: var(--warn);
+  border: 1px solid var(--warn-border);
+  background: var(--warn-bg);
 }
 
 .badge-model {
-  color: #9aa7ff;
-  border: 1px solid #2b3354;
-  background: #181d2e;
+  color: var(--indigo);
+  border: 1px solid var(--accent-border);
+  background: var(--accent-bg);
   font-variant-numeric: tabular-nums;
 }
 
@@ -141,13 +141,13 @@ function barColor(percent: number): string {
 .proxy-note {
   margin: 0;
   font-size: 11px;
-  color: #8b93a1;
+  color: var(--text-dim);
 }
 
 .plan {
   font-size: 10px;
-  color: #8b93a1;
-  border: 1px solid #262c36;
+  color: var(--text-dim);
+  border: 1px solid var(--border);
   border-radius: 999px;
   padding: 0 6px;
   text-transform: capitalize;
@@ -166,7 +166,7 @@ function barColor(percent: number): string {
 }
 
 .window-label {
-  color: #8b93a1;
+  color: var(--text-dim);
 }
 
 .window-percent {
@@ -176,7 +176,7 @@ function barColor(percent: number): string {
 
 .bar {
   height: 5px;
-  background: #262c36;
+  background: var(--border);
   border-radius: 3px;
   overflow: hidden;
 }
@@ -190,18 +190,18 @@ function barColor(percent: number): string {
 .window-reset {
   margin: 0;
   font-size: 10px;
-  color: #8b93a1;
+  color: var(--text-dim);
 }
 
 .fetched {
   margin: 0;
   font-size: 10px;
-  color: #5c6470;
+  color: var(--text-faint);
 }
 
 .error {
   margin: 0;
   font-size: 11px;
-  color: #f5a623;
+  color: var(--warn);
 }
 </style>

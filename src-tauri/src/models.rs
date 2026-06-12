@@ -13,8 +13,10 @@ pub struct SessionSummary {
     pub last_activity_at: i64,
     pub message_count: u32,
     pub current_activity: String,
-    /// 会话正在等待用户确认时的问题摘要（AskUserQuestion / ExitPlanMode）
+    /// 会话正在等待用户确认时的问题摘要（按界面语言本地化，仅展示用）
     pub pending_question: Option<String>,
+    /// 同一停顿的语言无关标识，用作通知去重 key（不随界面语言变化）
+    pub pending_key: Option<String>,
 }
 
 #[derive(Serialize, Clone, Debug)]

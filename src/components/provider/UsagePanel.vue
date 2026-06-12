@@ -14,7 +14,7 @@ defineEmits<{ refresh: [] }>();
 <template>
   <section>
     <div class="panel-head">
-      <h2 class="panel-title">订阅额度</h2>
+      <h2 class="panel-title">{{ $t("usage.title") }}</h2>
       <button
         class="refresh-btn"
         :class="{ 'is-loading': loading }"
@@ -32,8 +32,8 @@ defineEmits<{ refresh: [] }>();
         :now="now"
       />
     </div>
-    <p v-else-if="loading" class="empty">正在读取额度…</p>
-    <p v-else class="empty">未检测到 Claude Code 或 Codex（~/.claude、~/.codex 均不存在）</p>
+    <p v-else-if="loading" class="empty">{{ $t("usage.loading") }}</p>
+    <p v-else class="empty">{{ $t("usage.notDetected") }}</p>
   </section>
 </template>
 
@@ -49,13 +49,13 @@ defineEmits<{ refresh: [] }>();
   margin: 0;
   font-size: 13px;
   font-weight: 600;
-  color: #8b93a1;
+  color: var(--text-dim);
 }
 
 .refresh-btn {
   background: none;
   border: none;
-  color: #8b93a1;
+  color: var(--text-dim);
   font-size: 15px;
   cursor: pointer;
   padding: 2px 6px;
@@ -63,8 +63,8 @@ defineEmits<{ refresh: [] }>();
 }
 
 .refresh-btn:hover {
-  color: #e6e9ee;
-  background: #1d222b;
+  color: var(--text);
+  background: var(--surface-hover);
 }
 
 .refresh-btn.is-loading {
@@ -86,6 +86,6 @@ defineEmits<{ refresh: [] }>();
 .empty {
   margin: 0;
   font-size: 12px;
-  color: #8b93a1;
+  color: var(--text-dim);
 }
 </style>

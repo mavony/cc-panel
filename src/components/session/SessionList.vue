@@ -38,7 +38,7 @@ watch(
 
 <template>
   <section class="list-section">
-    <h2 class="panel-title">Agent 会话</h2>
+    <h2 class="panel-title">{{ $t("sessions.title") }}</h2>
     <div v-if="sessions.length" class="list">
       <div
         v-for="session in sessions"
@@ -55,7 +55,7 @@ watch(
         />
       </div>
     </div>
-    <p v-else class="empty">最近 30 分钟内没有活跃会话</p>
+    <p v-else class="empty">{{ $t("sessions.empty") }}</p>
   </section>
 </template>
 
@@ -70,7 +70,7 @@ watch(
   margin: 0;
   font-size: 13px;
   font-weight: 600;
-  color: #8b93a1;
+  color: var(--text-dim);
 }
 
 .list {
@@ -90,7 +90,7 @@ watch(
 @keyframes focus-flash {
   0%,
   40% {
-    box-shadow: 0 0 0 2px #f5a623;
+    box-shadow: 0 0 0 2px var(--warn);
   }
   100% {
     box-shadow: 0 0 0 2px transparent;
@@ -100,7 +100,7 @@ watch(
 .empty {
   margin: 0;
   font-size: 12px;
-  color: #5c6470;
+  color: var(--text-faint);
   text-align: center;
   padding: 24px 0;
 }

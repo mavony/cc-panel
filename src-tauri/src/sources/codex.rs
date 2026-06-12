@@ -167,7 +167,7 @@ fn parse_session(path: &Path, status: &str, age_secs: u64) -> Option<SessionDeta
                     message_count += 1;
                     if let Some(text) = payload.get("message").and_then(Value::as_str) {
                         latest_message = truncate_chars(text, 200);
-                        current_activity = "正在回复".into();
+                        current_activity = crate::tr_rt("正在回复", "Replying").into();
                     }
                 }
                 _ => {}
@@ -177,7 +177,7 @@ fn parse_session(path: &Path, status: &str, age_secs: u64) -> Option<SessionDeta
                     let name = payload
                         .get("name")
                         .and_then(Value::as_str)
-                        .unwrap_or("(工具)");
+                        .unwrap_or(crate::tr_rt("(工具)", "(tool)"));
                     current_activity = name.to_string();
                     if name == "update_plan" {
                         if let Some(parsed) = payload
@@ -222,6 +222,7 @@ fn parse_session(path: &Path, status: &str, age_secs: u64) -> Option<SessionDeta
         message_count,
         current_activity,
         pending_question: None,
+        pending_key: None,
     };
     Some(SessionDetail {
         summary,
@@ -267,7 +268,7 @@ pub fn usage() -> ProviderUsage {
         plan: None,
         windows: Vec::new(),
         fetched_at: now_ms(),
-        error: Some("最近 7 天没有 Codex 会话记录，无额度数据".into()),
+        error: Some(crate::tr_rt("最近 7 天没有 Codex 会话记录，无额度数据", "No Codex sessions in the last 7 days; no usage data").into()),
         model,
         source: "official".into(),
         proxy_host: None,
@@ -294,16 +295,22 @@ fn latest_rate_limits(path: &Path) -> Option<ProviderUsage> {
     }
     let rl = latest?;
     let mut windows = Vec::new();
-    for (key, label) in [("primary", "5 小时"), ("secondary", "周期")] {
+    let en = crate::load_panel_settings().language == "en";
+    for (key, label) in [
+        ("primary", crate::tr(en, "5 小时", "5h")),
+        ("secondary", crate::tr(en, "周期", "cycle")),
+    ] {
         let Some(w) = rl.get(key).filter(|w| !w.is_null()) else {
             continue;
         };
         let minutes = w.get("window_minutes").and_then(Value::as_i64).unwrap_or(0);
         let label = match minutes {
             0 => label.to_string(),
-            m if m % (24 * 60) == 0 => format!("{} 天", m / (24 * 60)),
-            m if m % 60 == 0 => format!("{} 小时", m / 60),
-            m => format!("{m} 分钟"),
+            m if m % (24 * 60) == 0 => {
+                format!("{}{}", m / (24 * 60), crate::tr(en, " 天", "d"))
+            }
+            m if m % 60 == 0 => format!("{}{}", m / 60, crate::tr(en, " 小时", "h")),
+            m => format!("{m}{}", crate::tr(en, " 分钟", "m")),
         };
         windows.push(UsageWindow {
             label,

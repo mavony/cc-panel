@@ -27,6 +27,9 @@ export const usePanelStore = defineStore("panel", () => {
     notifyDone: true,
     terminalApp: "Terminal",
     confirmTimeoutSecs: 45,
+    theme: "dark",
+    language: "zh",
+    notifySound: true,
   });
   const resumeError = shallowRef<string | null>(null);
   const deleteError = shallowRef<string | null>(null);
@@ -117,6 +120,7 @@ export const usePanelStore = defineStore("panel", () => {
     refreshConfirms();
     loadConfirmHookStatus();
     loadPanelSettings();
+    refreshAutostart();
     setInterval(refreshSessions, SESSIONS_POLL_MS);
     setInterval(refreshUsage, USAGE_POLL_MS);
     setInterval(refreshConfirms, CONFIRM_POLL_MS);
@@ -168,6 +172,27 @@ export const usePanelStore = defineStore("panel", () => {
     }
   }
 
+  /** 开机自启状态（启动时拉取一次） */
+  const autostartEnabled = shallowRef(false);
+
+  async function refreshAutostart() {
+    try {
+      autostartEnabled.value = await invoke<boolean>("autostart_status");
+    } catch {
+      autostartEnabled.value = false;
+    }
+  }
+
+  /** 开关开机自启，返回错误信息（成功为 null） */
+  async function setAutostart(enabled: boolean): Promise<string | null> {
+    try {
+      autostartEnabled.value = await invoke<boolean>("set_autostart", { enabled });
+      return null;
+    } catch (e) {
+      return String(e);
+    }
+  }
+
   /** 会话管理页：删除会话（后端移到废纸篓）。成功返回 true，失败时原因放进 deleteError */
   async function deleteSession(filePath: string): Promise<boolean> {
     deleteError.value = null;
@@ -201,6 +226,9 @@ export const usePanelStore = defineStore("panel", () => {
     resumeSession,
     deleteError,
     deleteSession,
+    autostartEnabled,
+    refreshAutostart,
+    setAutostart,
     fetchHistorySessions,
     fetchSessionMessages,
   };

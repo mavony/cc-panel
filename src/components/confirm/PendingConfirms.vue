@@ -1,5 +1,8 @@
 <script setup lang="ts">
+import { usePanelStore } from "../../stores/panel";
 import type { PendingConfirm } from "../../types";
+
+const store = usePanelStore();
 
 defineProps<{ confirms: PendingConfirm[] }>();
 
@@ -13,7 +16,7 @@ function projectName(path: string): string {
 
 <template>
   <section v-if="confirms.length" class="confirm-section">
-    <h2 class="panel-title">待确认（{{ confirms.length }}）</h2>
+    <h2 class="panel-title">{{ $t("confirm.title", { n: confirms.length }) }}</h2>
     <article v-for="c in confirms" :key="c.id" class="confirm-card">
       <div class="confirm-main">
         <span class="tool">{{ c.toolName }}</span>
@@ -21,10 +24,10 @@ function projectName(path: string): string {
         <span v-if="c.projectPath" class="project">{{ projectName(c.projectPath) }}</span>
       </div>
       <div class="confirm-actions">
-        <button class="btn btn-allow" @click="$emit('resolve', c.id, 'allow')">允许</button>
-        <button class="btn btn-deny" @click="$emit('resolve', c.id, 'deny')">拒绝</button>
+        <button class="btn btn-allow" @click="$emit('resolve', c.id, 'allow')">{{ $t("confirm.allow") }}</button>
+        <button class="btn btn-deny" @click="$emit('resolve', c.id, 'deny')">{{ $t("confirm.deny") }}</button>
       </div>
-      <p class="hint">不操作约 45 秒后回到终端确认</p>
+      <p class="hint">{{ $t("confirm.hint", { n: store.panelSettings.confirmTimeoutSecs }) }}</p>
     </article>
   </section>
 </template>
@@ -40,12 +43,12 @@ function projectName(path: string): string {
   margin: 0;
   font-size: 13px;
   font-weight: 600;
-  color: #f5a623;
+  color: var(--warn);
 }
 
 .confirm-card {
-  background: #201a10;
-  border: 1px solid #4a3a1d;
+  background: var(--warn-bg);
+  border: 1px solid var(--warn-border);
   border-radius: 14px;
   padding: 12px;
   display: flex;
@@ -63,15 +66,15 @@ function projectName(path: string): string {
 .tool {
   font-size: 12px;
   font-weight: 700;
-  color: #f5a623;
+  color: var(--warn);
   flex-shrink: 0;
 }
 
 .summary {
   font-size: 11px;
-  color: #e6e9ee;
-  background: #11141a;
-  border: 1px solid #262c36;
+  color: var(--text);
+  background: var(--surface-deep);
+  border: 1px solid var(--border);
   border-radius: 6px;
   padding: 2px 6px;
   white-space: nowrap;
@@ -83,7 +86,7 @@ function projectName(path: string): string {
 
 .project {
   font-size: 10px;
-  color: #8b93a1;
+  color: var(--text-dim);
   flex-shrink: 0;
 }
 
@@ -102,27 +105,27 @@ function projectName(path: string): string {
 }
 
 .btn-allow {
-  background: #1d7a46;
-  color: #fff;
+  background: var(--success-strong);
+  color: var(--text-on-accent);
 }
 
 .btn-allow:hover {
-  background: #239454;
+  background: var(--success-hover);
 }
 
 .btn-deny {
-  background: #2a2f3a;
-  color: #e6e9ee;
+  background: var(--surface-neutral);
+  color: var(--text);
 }
 
 .btn-deny:hover {
-  background: #3a2528;
-  color: #ff8589;
+  background: var(--danger-bg-raised);
+  color: var(--danger-text);
 }
 
 .hint {
   margin: 0;
   font-size: 10px;
-  color: #8b7355;
+  color: var(--warn-dim);
 }
 </style>

@@ -65,6 +65,12 @@ pub struct PanelSettings {
     /// 面板内确认的等待时长（秒），超时回落终端原生提示。
     /// hook 脚本 nc 超时 = T+5、注册条目 timeout = T+10，保存时联动重写
     pub confirm_timeout_secs: u64,
+    /// 主题："dark" | "light" | "system"
+    pub theme: String,
+    /// 界面语言："zh" | "en"（系统通知文案同步切换）
+    pub language: String,
+    /// 系统通知是否带提示音
+    pub notify_sound: bool,
 }
 
 /// 确认等待时长允许范围：下限防回落形同虚设，上限防 hook 长期挂住 Claude Code
@@ -77,8 +83,25 @@ impl Default for PanelSettings {
             notify_done: true,
             terminal_app: "Terminal".into(),
             confirm_timeout_secs: 45,
+            theme: "dark".into(),
+            language: "zh".into(),
+            notify_sound: true,
         }
     }
+}
+
+/// 双语文案：en=true 取英文（热路径用，调用方先读一次语言设置）
+pub fn tr<'a>(en: bool, zh: &'a str, en_text: &'a str) -> &'a str {
+    if en {
+        en_text
+    } else {
+        zh
+    }
+}
+
+/// 双语文案：即时读语言设置（低频错误路径用）
+pub fn tr_rt(zh: &'static str, en: &'static str) -> &'static str {
+    tr(load_panel_settings().language == "en", zh, en)
 }
 
 fn panel_settings_path() -> Option<std::path::PathBuf> {
@@ -187,13 +210,11 @@ pub fn notify_dedup(
     }
 
     use tauri_plugin_notification::NotificationExt;
-    let _ = app
-        .notification()
-        .builder()
-        .title(title)
-        .body(body)
-        .sound("Glass")
-        .show();
+    let mut builder = app.notification().builder().title(title).body(body);
+    if load_panel_settings().notify_sound {
+        builder = builder.sound("Glass");
+    }
+    let _ = builder.show();
 }
 
 /// 待确认的工具权限请求列表（来自 PreToolUse hook）
@@ -251,6 +272,27 @@ async fn get_session_messages(
     tauri::async_runtime::spawn_blocking(move || sources::history::messages(&file_path, max.min(500)))
         .await
         .map_err(|_| "解析会话失败".to_string())?
+}
+
+/// 开机自启是否已开启
+#[tauri::command]
+fn autostart_status(app: tauri::AppHandle) -> bool {
+    use tauri_plugin_autostart::ManagerExt;
+    app.autolaunch().is_enabled().unwrap_or(false)
+}
+
+/// 开启/关闭开机自启（macOS LaunchAgent）
+#[tauri::command]
+fn set_autostart(app: tauri::AppHandle, enabled: bool) -> Result<bool, String> {
+    use tauri_plugin_autostart::ManagerExt;
+    let launcher = app.autolaunch();
+    let r = if enabled {
+        launcher.enable()
+    } else {
+        launcher.disable()
+    };
+    r.map_err(|e| format!("设置开机自启失败: {e}"))?;
+    Ok(launcher.is_enabled().unwrap_or(false))
 }
 
 /// 删除历史会话（移到废纸篓）。路径归属与"进行中"由后端独立校验。
@@ -341,6 +383,7 @@ fn watch_sessions(handle: tauri::AppHandle) {
         }
 
         let settings = load_panel_settings();
+        let en = settings.language == "en";
         for s in &sessions {
             let path = &s.summary.file_path;
             let status = s.summary.status.as_str();
@@ -348,15 +391,23 @@ fn watch_sessions(handle: tauri::AppHandle) {
             let old = prev.get(path);
             let old_status = old.map(|(st, _)| st.as_str());
             // 新进入 waiting，或仍是 waiting 但停在了新的确认点上（问题变了）；
-            // 去重 key 含问题文案：同一会话的不同确认点各自独立去重
+            // 去重 key 用语言无关的 pending_key：同一会话的不同确认点各自独立去重，
+            // 且与 hook 链路（confirm.rs 的 permwait key）对同一停顿天然互斥
             let newly_waiting = status == "waiting"
                 && (old_status != Some("waiting") || old.map(|(_, q)| q) != Some(question));
             if settings.notify_confirm && newly_waiting {
-                let q = question.as_deref().unwrap_or("等待确认");
+                let q = question
+                    .as_deref()
+                    .unwrap_or(tr(en, "等待确认", "Waiting for confirmation"));
+                let dedup = s.summary.pending_key.as_deref().unwrap_or(q);
                 notify_dedup(
                     &handle,
-                    format!("waiting:{path}:{q}"),
-                    &format!("等待确认：{}", s.summary.title),
+                    format!("waiting:{path}:{dedup}"),
+                    &format!(
+                        "{}{}",
+                        tr(en, "等待确认：", "Waiting: "),
+                        s.summary.title
+                    ),
                     q,
                     Some(path),
                 );
@@ -366,7 +417,7 @@ fn watch_sessions(handle: tauri::AppHandle) {
                 notify_dedup(
                     &handle,
                     format!("done:{path}"),
-                    "会话结束",
+                    tr(en, "会话结束", "Session finished"),
                     &s.summary.title,
                     Some(path),
                 );
@@ -398,6 +449,10 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            None,
+        ))
         .invoke_handler(tauri::generate_handler![
             list_sessions,
             get_usage,
@@ -406,6 +461,8 @@ pub fn run() {
             list_history_sessions,
             get_session_messages,
             delete_session,
+            autostart_status,
+            set_autostart,
             list_pending_confirms,
             resolve_confirm,
             confirm_hook_status,

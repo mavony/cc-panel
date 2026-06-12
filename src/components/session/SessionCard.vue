@@ -34,13 +34,13 @@ const isWaiting = computed(() => props.session.status === "waiting");
         class="status-dot"
         :class="{ 'is-running': isRunning || isWaiting }"
         :style="{
-          backgroundColor: isWaiting ? '#f5a623' : isRunning ? providerColor : '#5c6470',
+          backgroundColor: isWaiting ? 'var(--warn)' : isRunning ? providerColor : 'var(--text-faint)',
         }"
       />
       <span class="session-main">
         <span class="session-title">{{ session.title }}</span>
         <span v-if="isWaiting" class="waiting-line">
-          ⏸ 等待确认<template v-if="session.pendingQuestion">：{{ session.pendingQuestion }}</template>
+          ⏸ {{ $t("sessions.waiting") }}<template v-if="session.pendingQuestion">: {{ session.pendingQuestion }}</template>
         </span>
         <span class="session-meta">
           <span class="provider" :style="{ color: providerColor }">
@@ -51,7 +51,7 @@ const isWaiting = computed(() => props.session.status === "waiting");
         </span>
       </span>
       <span class="session-side">
-        <span v-if="isWaiting" class="waiting-badge">待确认</span>
+        <span v-if="isWaiting" class="waiting-badge">{{ $t("sessions.waitingBadge") }}</span>
         <span v-else-if="isRunning && session.currentActivity" class="activity">
           {{ session.currentActivity }}
         </span>
@@ -69,14 +69,14 @@ const isWaiting = computed(() => props.session.status === "waiting");
 
 <style scoped>
 .session {
-  background: #171b22;
-  border: 1px solid #262c36;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 14px;
   overflow: hidden;
 }
 
 .session.is-expanded {
-  border-color: #323a47;
+  border-color: var(--border-strong);
 }
 
 .session-head {
@@ -94,7 +94,7 @@ const isWaiting = computed(() => props.session.status === "waiting");
 }
 
 .session-head:hover {
-  background: #1d222b;
+  background: var(--surface-hover);
 }
 
 .status-dot {
@@ -132,7 +132,7 @@ const isWaiting = computed(() => props.session.status === "waiting");
 
 .session-meta {
   font-size: 11px;
-  color: #8b93a1;
+  color: var(--text-dim);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -152,7 +152,7 @@ const isWaiting = computed(() => props.session.status === "waiting");
 
 .waiting-line {
   font-size: 11px;
-  color: #f5a623;
+  color: var(--warn);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -160,9 +160,9 @@ const isWaiting = computed(() => props.session.status === "waiting");
 
 .waiting-badge {
   font-size: 10px;
-  color: #f5a623;
-  background: #2a2113;
-  border: 1px solid #4a3a1d;
+  color: var(--warn);
+  background: var(--warn-bg);
+  border: 1px solid var(--warn-border);
   border-radius: 999px;
   padding: 2px 8px;
   white-space: nowrap;
@@ -170,9 +170,9 @@ const isWaiting = computed(() => props.session.status === "waiting");
 
 .activity {
   font-size: 10px;
-  color: #8b93a1;
-  background: #11141a;
-  border: 1px solid #262c36;
+  color: var(--text-dim);
+  background: var(--surface-deep);
+  border: 1px solid var(--border);
   border-radius: 999px;
   padding: 2px 8px;
   white-space: nowrap;
@@ -181,7 +181,7 @@ const isWaiting = computed(() => props.session.status === "waiting");
 }
 
 .chevron {
-  color: #5c6470;
+  color: var(--text-faint);
   font-size: 16px;
   transition: transform 0.2s ease;
 }

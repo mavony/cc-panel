@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { onMounted, shallowRef } from "vue";
+import { onMounted, shallowRef, watchEffect } from "vue";
+import { useI18n } from "vue-i18n";
 
 import PendingConfirms from "./components/confirm/PendingConfirms.vue";
 import SessionManager from "./components/manager/SessionManager.vue";
@@ -29,6 +30,22 @@ onMounted(() => {
   });
 });
 
+// 主题：dark/light 直接生效；system 跟随 prefers-color-scheme 并监听变化
+const systemDark = window.matchMedia("(prefers-color-scheme: dark)");
+const systemDarkNow = shallowRef(systemDark.matches);
+systemDark.addEventListener("change", (e) => (systemDarkNow.value = e.matches));
+watchEffect(() => {
+  const t = store.panelSettings.theme;
+  const resolved = t === "system" ? (systemDarkNow.value ? "dark" : "light") : t;
+  document.documentElement.dataset.theme = resolved;
+});
+
+// 语言：跟随设置切换 i18n locale
+const { locale } = useI18n();
+watchEffect(() => {
+  locale.value = store.panelSettings.language;
+});
+
 /** data-tauri-drag-region 属性探测在 Overlay 模式下不可靠，显式调用窗口 API 拖拽 */
 function startDrag(e: MouseEvent) {
   if (e.buttons !== 1) return;
@@ -54,20 +71,20 @@ function startDrag(e: MouseEvent) {
       <div>
         <h1 class="header-title">CC Panel</h1>
         <p class="header-sub">
-          {{ store.runningCount > 0 ? `${store.runningCount} 个 agent 进行中` : "暂无进行中的 agent" }}
+          {{ store.runningCount > 0 ? $t("header.running", { n: store.runningCount }) : $t("header.idle") }}
         </p>
       </div>
       <span class="header-right" @mousedown.stop>
         <span v-if="store.lastSyncAt" class="header-sync">
-          {{ formatRelative(store.lastSyncAt, now) }}同步
+          {{ $t("header.sync", { t: formatRelative(store.lastSyncAt, now) }) }}
         </span>
-        <button class="gear" title="会话管理" @click="view = 'sessions'">
+        <button class="gear" :title="$t('header.manageTitle')" @click="view = 'sessions'">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
             <rect x="3" y="4" width="18" height="16" rx="3" />
             <path d="M7 9h10M7 13h10M7 17h6" />
           </svg>
         </button>
-        <button class="gear" title="设置" @click="view = 'settings'">
+        <button class="gear" :title="$t('header.settingsTitle')" @click="view = 'settings'">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="3" />
             <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
@@ -160,7 +177,7 @@ function startDrag(e: MouseEvent) {
   justify-content: center;
   background: none;
   border: none;
-  color: #8b93a1;
+  color: var(--text-dim);
   font-size: 15px;
   cursor: pointer;
   padding: 0 4px;
@@ -170,8 +187,8 @@ function startDrag(e: MouseEvent) {
 }
 
 .gear:hover {
-  color: #e6e9ee;
-  background: #1d222b;
+  color: var(--text);
+  background: var(--surface-hover);
 }
 
 /* 窄窗口退化为上下结构 */
@@ -203,12 +220,12 @@ function startDrag(e: MouseEvent) {
 .header-sub {
   margin: 2px 0 0;
   font-size: 12px;
-  color: #8b93a1;
+  color: var(--text-dim);
 }
 
 .header-sync {
   font-size: 11px;
-  color: #8b93a1;
+  color: var(--text-dim);
   padding-top: 4px;
 }
 </style>

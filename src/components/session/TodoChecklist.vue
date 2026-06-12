@@ -42,7 +42,7 @@ defineProps<{ todos: TodoItem[] }>();
   flex-shrink: 0;
   width: 14px;
   height: 14px;
-  border: 1px solid #3a414d;
+  border: 1px solid var(--border-strong);
   border-radius: 50%;
   display: inline-flex;
   align-items: center;
@@ -52,27 +52,27 @@ defineProps<{ todos: TodoItem[] }>();
 }
 
 .is-completed .todo-mark {
-  background: #2f6b4f;
-  border-color: #2f6b4f;
-  color: #d9f2e5;
+  background: var(--success-chip);
+  border-color: var(--success-chip);
+  color: var(--success-chip-text);
 }
 
 .is-in_progress .todo-mark {
-  border-color: #6ea8fe;
-  color: #6ea8fe;
+  border-color: var(--accent-text);
+  color: var(--accent-text);
 }
 
 .is-completed .todo-text {
-  color: #5c6470;
+  color: var(--text-faint);
   text-decoration: line-through;
 }
 
 .is-in_progress .todo-text {
-  color: #e6e9ee;
+  color: var(--text);
   font-weight: 500;
 }
 
 .todo-text {
-  color: #b8bfc9;
+  color: var(--text-mid);
 }
 </style>

@@ -164,10 +164,10 @@ fn handle_conn(stream: UnixStream, app: tauri::AppHandle) {
         return reply(stream, "");
     }
 
-    // jsonl 链路对同一次停顿的启发式通知会用这个 key（文案逐字一致），
+    // jsonl 链路对同一次停顿的启发式通知用同样的语言无关 key（permwait:{desc}），
     // hook 已提醒过的停顿据此压制，不同确认点互不影响
     let jsonl_key = format!(
-        "waiting:{transcript}:可能在等待权限确认 — {}",
+        "waiting:{transcript}:permwait:{}",
         crate::sources::claude::describe_tool(tool_name, &tool_input)
     );
 
@@ -182,7 +182,7 @@ fn handle_conn(stream: UnixStream, app: tauri::AppHandle) {
             crate::notify_dedup(
                 &app,
                 jsonl_key,
-                "等待权限确认（CC Panel）",
+                crate::tr_rt("等待权限确认（CC Panel）", "Awaiting permission (CC Panel)"),
                 &format!("{}: {}", tool_name, summarize(tool_name, &tool_input)),
                 Some(transcript),
             );
@@ -212,7 +212,7 @@ fn handle_conn(stream: UnixStream, app: tauri::AppHandle) {
         crate::notify_dedup(
             &app,
             format!("confirm:{id}"),
-            "待确认（CC Panel）",
+            crate::tr_rt("待确认（CC Panel）", "Pending confirmation (CC Panel)"),
             &notify_body,
             Some(transcript),
         );

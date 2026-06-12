@@ -82,12 +82,12 @@ pub fn delete(file_path: &str) -> Result<(), String> {
     crate::resume::parse_target(file_path)?;
     let path = Path::new(file_path)
         .canonicalize()
-        .map_err(|_| "会话文件不存在")?;
-    let age = file_age(&path).ok_or("无法读取文件状态")?;
+        .map_err(|_| crate::tr_rt("会话文件不存在", "Session file not found"))?;
+    let age = file_age(&path).ok_or(crate::tr_rt("无法读取文件状态", "Failed to read file status"))?;
     if age < RUNNING_SECS {
-        return Err("会话正在进行中，不能删除".into());
+        return Err(crate::tr_rt("会话正在进行中，不能删除", "Session is active and cannot be deleted").into());
     }
-    trash::delete(&path).map_err(|_| "移到废纸篓失败".to_string())
+    trash::delete(&path).map_err(|_| crate::tr_rt("移到废纸篓失败", "Failed to move to Trash").to_string())
 }
 
 /// 分页列出历史会话；keyword 匹配标题或项目路径（不区分大小写），

@@ -57,6 +57,12 @@ export interface PanelSettings {
   terminalApp: "Terminal" | "iTerm";
   /** 面板内确认的等待时长（秒），超时回落终端；后端 clamp 10–300 */
   confirmTimeoutSecs: number;
+  /** 主题 */
+  theme: "dark" | "light" | "system";
+  /** 界面语言（系统通知文案同步切换） */
+  language: "zh" | "en";
+  /** 系统通知是否带提示音 */
+  notifySound: boolean;
 }
 
 /** 来自 PreToolUse hook 的待确认工具权限请求 */

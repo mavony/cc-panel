@@ -8,10 +8,16 @@ defineEmits<{ back: [] }>();
 
 const store = usePanelStore();
 const hookError = shallowRef<string | null>(null);
+const autostartError = shallowRef<string | null>(null);
 
 async function toggleConfirmHook(e: Event) {
   const enabled = (e.target as HTMLInputElement).checked;
   hookError.value = await store.setConfirmHook(enabled);
+}
+
+async function toggleAutostart(e: Event) {
+  const enabled = (e.target as HTMLInputElement).checked;
+  autostartError.value = await store.setAutostart(enabled);
 }
 
 /** 失焦/回车时 clamp 到 10–300 再保存（后端还会兜底一次） */
@@ -28,11 +34,55 @@ function saveConfirmTimeout(e: Event) {
 <template>
   <div class="settings-page">
     <header class="bar">
-      <button class="back" title="返回面板" @click="$emit('back')">‹</button>
-      <h2 class="bar-title">设置</h2>
+      <button class="back" :title="$t('settings.back')" @click="$emit('back')">‹</button>
+      <h2 class="bar-title">{{ $t("settings.title") }}</h2>
     </header>
 
     <section class="settings">
+      <label class="settings-row settings-row-select">
+        <span>
+          {{ $t("settings.theme") }}
+          <span class="settings-note">{{ $t("settings.themeNote") }}</span>
+        </span>
+        <select
+          class="settings-select"
+          :value="store.panelSettings.theme"
+          @change="store.updatePanelSettings({ theme: ($event.target as HTMLSelectElement).value as PanelSettings['theme'] })"
+        >
+          <option value="dark">{{ $t("settings.themeDark") }}</option>
+          <option value="light">{{ $t("settings.themeLight") }}</option>
+          <option value="system">{{ $t("settings.themeSystem") }}</option>
+        </select>
+      </label>
+
+      <label class="settings-row settings-row-select">
+        <span>
+          {{ $t("settings.language") }}
+          <span class="settings-note">{{ $t("settings.languageNote") }}</span>
+        </span>
+        <select
+          class="settings-select"
+          :value="store.panelSettings.language"
+          @change="store.updatePanelSettings({ language: ($event.target as HTMLSelectElement).value as PanelSettings['language'] })"
+        >
+          <option value="zh">中文</option>
+          <option value="en">English</option>
+        </select>
+      </label>
+
+      <label class="settings-row">
+        <input
+          type="checkbox"
+          :checked="store.autostartEnabled"
+          @change="toggleAutostart"
+        />
+        <span>
+          {{ $t("settings.autostart") }}
+          <span class="settings-note">{{ $t("settings.autostartNote") }}</span>
+        </span>
+      </label>
+      <p v-if="autostartError" class="settings-error">{{ autostartError }}</p>
+
       <label class="settings-row">
         <input
           type="checkbox"
@@ -40,18 +90,16 @@ function saveConfirmTimeout(e: Event) {
           @change="toggleConfirmHook"
         />
         <span>
-          在面板中确认工具权限（Claude）
-          <span class="settings-note">
-            安装 PreToolUse hook 到 ~/.claude/settings.json（写入前自动备份）；面板窗口可见时，Bash/文件写入的权限确认会出现在面板里，新开的会话生效
-          </span>
+          {{ $t("settings.hook") }}
+          <span class="settings-note">{{ $t("settings.hookNote") }}</span>
         </span>
       </label>
       <p v-if="hookError" class="settings-error">{{ hookError }}</p>
 
       <label class="settings-row settings-row-select">
         <span>
-          面板确认等待时长（秒）
-          <span class="settings-note">面板内确认超过该时长未处理时，回落到终端原生提示；范围 10–300，默认 45。修改后自动更新已安装的 hook</span>
+          {{ $t("settings.timeout") }}
+          <span class="settings-note">{{ $t("settings.timeoutNote") }}</span>
         </span>
         <input
           class="settings-number"
@@ -71,8 +119,8 @@ function saveConfirmTimeout(e: Event) {
           @change="store.updatePanelSettings({ notifyConfirm: ($event.target as HTMLInputElement).checked })"
         />
         <span>
-          待确认时发系统通知
-          <span class="settings-note">会话停在权限/选择/计划批准上时提醒（同一确认点 10 分钟内不重复）</span>
+          {{ $t("settings.notifyConfirm") }}
+          <span class="settings-note">{{ $t("settings.notifyConfirmNote") }}</span>
         </span>
       </label>
 
@@ -83,15 +131,27 @@ function saveConfirmTimeout(e: Event) {
           @change="store.updatePanelSettings({ notifyDone: ($event.target as HTMLInputElement).checked })"
         />
         <span>
-          会话结束时发系统通知
-          <span class="settings-note">基于约 2 分钟无新输出判定，通知有相应延迟</span>
+          {{ $t("settings.notifyDone") }}
+          <span class="settings-note">{{ $t("settings.notifyDoneNote") }}</span>
+        </span>
+      </label>
+
+      <label class="settings-row">
+        <input
+          type="checkbox"
+          :checked="store.panelSettings.notifySound"
+          @change="store.updatePanelSettings({ notifySound: ($event.target as HTMLInputElement).checked })"
+        />
+        <span>
+          {{ $t("settings.notifySound") }}
+          <span class="settings-note">{{ $t("settings.notifySoundNote") }}</span>
         </span>
       </label>
 
       <label class="settings-row settings-row-select">
         <span>
-          恢复会话使用的终端
-          <span class="settings-note">点击会话里的"在终端恢复"时，用所选终端打开并续接会话</span>
+          {{ $t("settings.terminal") }}
+          <span class="settings-note">{{ $t("settings.terminalNote") }}</span>
         </span>
         <select
           class="settings-select"
@@ -122,10 +182,10 @@ function saveConfirmTimeout(e: Event) {
 }
 
 .back {
-  background: #171b22;
-  border: 1px solid #262c36;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 10px;
-  color: #e6e9ee;
+  color: var(--text);
   font-size: 18px;
   line-height: 1;
   width: 30px;
@@ -134,7 +194,7 @@ function saveConfirmTimeout(e: Event) {
 }
 
 .back:hover {
-  background: #1d222b;
+  background: var(--surface-hover);
 }
 
 .bar-title {
@@ -144,8 +204,8 @@ function saveConfirmTimeout(e: Event) {
 }
 
 .settings {
-  background: #171b22;
-  border: 1px solid #262c36;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 14px;
   padding: 12px;
   display: flex;
@@ -169,13 +229,13 @@ function saveConfirmTimeout(e: Event) {
   display: block;
   margin-top: 2px;
   font-size: 11px;
-  color: #8b93a1;
+  color: var(--text-dim);
 }
 
 .settings-error {
   margin: 8px 0 0;
   font-size: 11px;
-  color: #ff8589;
+  color: var(--danger-text);
 }
 
 .settings-row-select {
@@ -186,19 +246,19 @@ function saveConfirmTimeout(e: Event) {
 }
 
 .settings-select {
-  background: #11141a;
-  border: 1px solid #262c36;
+  background: var(--surface-deep);
+  border: 1px solid var(--border);
   border-radius: 8px;
-  color: #e6e9ee;
+  color: var(--text);
   font-size: 12px;
   padding: 4px 8px;
 }
 
 .settings-number {
-  background: #11141a;
-  border: 1px solid #262c36;
+  background: var(--surface-deep);
+  border: 1px solid var(--border);
   border-radius: 8px;
-  color: #e6e9ee;
+  color: var(--text);
   font-size: 12px;
   padding: 4px 8px;
   width: 72px;

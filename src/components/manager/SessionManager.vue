@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { nextTick, onMounted, shallowRef, watch } from "vue";
 
+import { useI18n } from "vue-i18n";
+
 import { useNow } from "../../composables/useNow";
 import { usePanelStore } from "../../stores/panel";
 import type { ChatMessage, HistorySession } from "../../types";
@@ -12,6 +14,7 @@ defineEmits<{ back: [] }>();
 
 const store = usePanelStore();
 const now = useNow();
+const { t } = useI18n();
 
 const items = shallowRef<HistorySession[]>([]);
 const listLoading = shallowRef(false);
@@ -86,7 +89,7 @@ async function removeSession() {
 }
 
 function roleLabel(role: ChatMessage["role"]) {
-  return role === "user" ? "我" : role === "assistant" ? "助手" : "工具";
+  return role === "user" ? t("manager.roleMe") : role === "assistant" ? t("manager.roleAssistant") : t("manager.roleTool");
 }
 
 onMounted(() => load(true));
@@ -95,18 +98,18 @@ onMounted(() => load(true));
 <template>
   <div class="manager">
     <header class="bar">
-      <button class="back" title="返回面板" @click="$emit('back')">‹</button>
-      <h2 class="bar-title">会话管理</h2>
+      <button class="back" :title="$t('manager.back')" @click="$emit('back')">‹</button>
+      <h2 class="bar-title">{{ $t("manager.title") }}</h2>
       <input
         v-model="keyword"
         class="search"
         type="search"
-        placeholder="搜索标题或项目…"
+        :placeholder="$t('manager.searchPlaceholder')"
       />
       <div class="filter">
         <button
           v-for="opt in [
-            { value: '', label: '全部' },
+            { value: '', label: t('manager.filterAll') },
             { value: 'claude', label: 'Claude' },
             { value: 'codex', label: 'Codex' },
           ]"
@@ -121,11 +124,11 @@ onMounted(() => load(true));
     </header>
 
     <p v-if="store.resumeError" class="resume-error">
-      恢复会话失败：{{ store.resumeError }}
+      {{ $t("manager.resumeFailed") }}{{ store.resumeError }}
       <button class="resume-error-close" @click="store.resumeError = null">✕</button>
     </p>
     <p v-if="store.deleteError" class="resume-error">
-      删除会话失败：{{ store.deleteError }}
+      {{ $t("manager.deleteFailed") }}{{ store.deleteError }}
       <button class="resume-error-close" @click="store.deleteError = null">✕</button>
     </p>
 
@@ -146,15 +149,15 @@ onMounted(() => load(true));
                 <span class="item-title">{{ s.title }}</span>
                 <span class="item-meta">
                   {{ s.projectPath.split("/").pop() }} · {{ formatRelative(s.lastActivityAt, now) }}
-                  <span v-if="s.isActive" class="item-active">进行中</span>
+                  <span v-if="s.isActive" class="item-active">{{ $t("manager.active") }}</span>
                 </span>
               </span>
             </button>
           </li>
         </ul>
-        <p v-else-if="!listLoading" class="empty">没有匹配的会话</p>
+        <p v-else-if="!listLoading" class="empty">{{ $t("manager.noMatch") }}</p>
         <button v-if="hasMore && items.length" class="more" :disabled="listLoading" @click="load(false)">
-          {{ listLoading ? "加载中…" : "加载更多" }}
+          {{ listLoading ? $t("manager.loading") : $t("manager.loadMore") }}
         </button>
       </aside>
 
@@ -168,28 +171,28 @@ onMounted(() => load(true));
             <button
               class="resume-btn"
               :disabled="selected.isActive || resuming"
-              :title="selected.isActive ? '会话正在进行中，原终端仍在运行' : '打开终端并续接此会话'"
+              :title="selected.isActive ? $t('manager.resumeActiveTitle') : $t('manager.resumeTitle')"
               @click="resume"
             >
-              {{ resuming ? "正在打开…" : selected.isActive ? "进行中" : "在终端恢复" }}
+              {{ resuming ? $t("manager.resuming") : selected.isActive ? $t("manager.active") : $t("manager.resume") }}
             </button>
             <button class="reveal-btn" @click="store.revealPath(selected.projectPath)">
-              打开目录
+              {{ $t("manager.openDir") }}
             </button>
             <button
               v-if="!selected.isActive"
               class="delete-btn"
               :class="{ 'is-armed': deleteArmed }"
-              :title="deleteArmed ? '再次点击确认删除（移到废纸篓，可恢复）' : '删除此会话（移到废纸篓）'"
+              :title="deleteArmed ? $t('manager.deleteArmedTitle') : $t('manager.deleteTitle')"
               @click="removeSession"
             >
-              {{ deleteArmed ? "确认删除？" : "删除会话" }}
+              {{ deleteArmed ? $t("manager.deleteConfirm") : $t("manager.deleteBtn") }}
             </button>
           </div>
 
           <div ref="messagesEl" class="messages">
-            <p v-if="messagesLoading" class="empty">加载对话内容…</p>
-            <p v-else-if="!messages.length" class="empty">没有可展示的消息</p>
+            <p v-if="messagesLoading" class="empty">{{ $t("manager.loadingMessages") }}</p>
+            <p v-else-if="!messages.length" class="empty">{{ $t("manager.noMessages") }}</p>
             <template v-else>
               <div
                 v-for="(m, i) in messages"
@@ -203,7 +206,7 @@ onMounted(() => load(true));
             </template>
           </div>
         </template>
-        <p v-else class="empty empty-center">选择左侧会话查看对话内容</p>
+        <p v-else class="empty empty-center">{{ $t("manager.selectHint") }}</p>
       </main>
     </div>
   </div>
@@ -225,10 +228,10 @@ onMounted(() => load(true));
 }
 
 .back {
-  background: #171b22;
-  border: 1px solid #262c36;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 10px;
-  color: #e6e9ee;
+  color: var(--text);
   font-size: 18px;
   line-height: 1;
   width: 30px;
@@ -237,7 +240,7 @@ onMounted(() => load(true));
 }
 
 .back:hover {
-  background: #1d222b;
+  background: var(--surface-hover);
 }
 
 .bar-title {
@@ -248,10 +251,10 @@ onMounted(() => load(true));
 
 .search {
   margin-left: auto;
-  background: #11141a;
-  border: 1px solid #262c36;
+  background: var(--surface-deep);
+  border: 1px solid var(--border);
   border-radius: 10px;
-  color: #e6e9ee;
+  color: var(--text);
   font-size: 12px;
   padding: 6px 10px;
   width: 200px;
@@ -259,13 +262,13 @@ onMounted(() => load(true));
 }
 
 .search:focus {
-  border-color: #3a4250;
+  border-color: var(--border-strong);
 }
 
 .filter {
   display: flex;
-  background: #11141a;
-  border: 1px solid #262c36;
+  background: var(--surface-deep);
+  border: 1px solid var(--border);
   border-radius: 10px;
   padding: 2px;
   gap: 2px;
@@ -275,23 +278,23 @@ onMounted(() => load(true));
   background: none;
   border: none;
   border-radius: 8px;
-  color: #8b93a1;
+  color: var(--text-dim);
   font-size: 11px;
   padding: 4px 10px;
   cursor: pointer;
 }
 
 .filter-btn.is-on {
-  background: #262c36;
-  color: #e6e9ee;
+  background: var(--border);
+  color: var(--text);
 }
 
 .resume-error {
   margin: 0;
   font-size: 12px;
-  color: #ff8589;
-  background: #2a1517;
-  border: 1px solid #4a2326;
+  color: var(--danger-text);
+  background: var(--danger-bg);
+  border: 1px solid var(--danger-border);
   border-radius: 10px;
   padding: 8px 12px;
   display: flex;
@@ -303,7 +306,7 @@ onMounted(() => load(true));
 .resume-error-close {
   background: none;
   border: none;
-  color: #ff8589;
+  color: var(--danger-text);
   font-size: 11px;
   cursor: pointer;
   padding: 0 2px;
@@ -323,8 +326,8 @@ onMounted(() => load(true));
   flex-direction: column;
   gap: 8px;
   overflow-y: auto;
-  background: #171b22;
-  border: 1px solid #262c36;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 14px;
   padding: 8px;
 }
@@ -354,11 +357,11 @@ onMounted(() => load(true));
 }
 
 .item:hover {
-  background: #1d222b;
+  background: var(--surface-hover);
 }
 
 .item.is-selected {
-  background: #1f2733;
+  background: var(--surface-raised);
 }
 
 .item-dot {
@@ -386,7 +389,7 @@ onMounted(() => load(true));
 
 .item-meta {
   font-size: 11px;
-  color: #8b93a1;
+  color: var(--text-dim);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -400,14 +403,14 @@ onMounted(() => load(true));
 .more {
   background: none;
   border: none;
-  color: #6ea8fe;
+  color: var(--accent-text);
   font-size: 11px;
   cursor: pointer;
   padding: 6px;
 }
 
 .more:disabled {
-  color: #5c6470;
+  color: var(--text-faint);
   cursor: default;
 }
 
@@ -416,8 +419,8 @@ onMounted(() => load(true));
   min-width: 0;
   display: flex;
   flex-direction: column;
-  background: #171b22;
-  border: 1px solid #262c36;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 14px;
   overflow: hidden;
 }
@@ -427,7 +430,7 @@ onMounted(() => load(true));
   align-items: center;
   gap: 10px;
   padding: 12px;
-  border-bottom: 1px solid #262c36;
+  border-bottom: 1px solid var(--border);
 }
 
 .detail-info {
@@ -447,7 +450,7 @@ onMounted(() => load(true));
 .detail-path {
   margin: 2px 0 0;
   font-size: 11px;
-  color: #8b93a1;
+  color: var(--text-dim);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -455,10 +458,10 @@ onMounted(() => load(true));
 
 .resume-btn {
   flex-shrink: 0;
-  background: #2156c9;
+  background: var(--accent);
   border: none;
   border-radius: 10px;
-  color: #fff;
+  color: var(--text-on-accent);
   font-size: 12px;
   font-weight: 600;
   padding: 7px 14px;
@@ -466,50 +469,50 @@ onMounted(() => load(true));
 }
 
 .resume-btn:hover:not(:disabled) {
-  background: #2a66e8;
+  background: var(--accent-hover);
 }
 
 .resume-btn:disabled {
-  background: #262c36;
-  color: #8b93a1;
+  background: var(--border);
+  color: var(--text-dim);
   cursor: default;
 }
 
 .reveal-btn {
   flex-shrink: 0;
   background: none;
-  border: 1px solid #262c36;
+  border: 1px solid var(--border);
   border-radius: 10px;
-  color: #b8bfc9;
+  color: var(--text-mid);
   font-size: 12px;
   padding: 6px 12px;
   cursor: pointer;
 }
 
 .reveal-btn:hover {
-  background: #1d222b;
+  background: var(--surface-hover);
 }
 
 .delete-btn {
   flex-shrink: 0;
   background: none;
-  border: 1px solid #262c36;
+  border: 1px solid var(--border);
   border-radius: 10px;
-  color: #b8bfc9;
+  color: var(--text-mid);
   font-size: 12px;
   padding: 6px 12px;
   cursor: pointer;
 }
 
 .delete-btn:hover {
-  border-color: #6b2a2a;
-  color: #e57373;
+  border-color: var(--danger-border);
+  color: var(--danger-muted);
 }
 
 .delete-btn.is-armed {
-  background: #c0392b;
-  border-color: #c0392b;
-  color: #fff;
+  background: var(--danger-strong);
+  border-color: var(--danger-strong);
+  color: var(--text-on-accent);
 }
 
 .messages {
@@ -530,40 +533,40 @@ onMounted(() => load(true));
 .msg-role {
   flex-shrink: 0;
   font-size: 10px;
-  color: #8b93a1;
-  border: 1px solid #262c36;
+  color: var(--text-dim);
+  border: 1px solid var(--border);
   border-radius: 6px;
   padding: 2px 6px;
   margin-top: 1px;
 }
 
 .msg-user .msg-role {
-  color: #6ea8fe;
-  border-color: #2a3a55;
+  color: var(--accent-text);
+  border-color: var(--accent-border);
 }
 
 .msg-text {
   margin: 0;
   font-size: 12px;
-  color: #b8bfc9;
+  color: var(--text-mid);
   white-space: pre-wrap;
   word-break: break-word;
   min-width: 0;
 }
 
 .msg-user .msg-text {
-  color: #e6e9ee;
+  color: var(--text);
 }
 
 .msg-tool .msg-text {
-  color: #5c6470;
+  color: var(--text-faint);
   font-size: 11px;
 }
 
 .empty {
   margin: 0;
   font-size: 12px;
-  color: #5c6470;
+  color: var(--text-faint);
   text-align: center;
   padding: 24px 0;
 }
