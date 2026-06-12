@@ -62,7 +62,13 @@ pub struct PanelSettings {
     pub notify_done: bool,
     /// 恢复会话使用的终端 App："Terminal" | "iTerm"
     pub terminal_app: String,
+    /// 面板内确认的等待时长（秒），超时回落终端原生提示。
+    /// hook 脚本 nc 超时 = T+5、注册条目 timeout = T+10，保存时联动重写
+    pub confirm_timeout_secs: u64,
 }
+
+/// 确认等待时长允许范围：下限防回落形同虚设，上限防 hook 长期挂住 Claude Code
+pub const CONFIRM_TIMEOUT_RANGE: std::ops::RangeInclusive<u64> = 10..=300;
 
 impl Default for PanelSettings {
     fn default() -> Self {
@@ -70,6 +76,7 @@ impl Default for PanelSettings {
             notify_confirm: true,
             notify_done: true,
             terminal_app: "Terminal".into(),
+            confirm_timeout_secs: 45,
         }
     }
 }
@@ -91,13 +98,25 @@ fn get_panel_settings() -> PanelSettings {
 }
 
 #[tauri::command]
-fn set_panel_settings(settings: PanelSettings) -> Result<(), String> {
+fn set_panel_settings(mut settings: PanelSettings) -> Result<(), String> {
+    settings.confirm_timeout_secs = settings
+        .confirm_timeout_secs
+        .clamp(*CONFIRM_TIMEOUT_RANGE.start(), *CONFIRM_TIMEOUT_RANGE.end());
+    let timeout_changed =
+        load_panel_settings().confirm_timeout_secs != settings.confirm_timeout_secs;
+
     let path = panel_settings_path().ok_or("无法定位用户目录")?;
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir).map_err(|e| format!("创建目录失败: {e}"))?;
     }
     let raw = serde_json::to_string_pretty(&settings).map_err(|e| e.to_string())?;
-    std::fs::write(path, raw).map_err(|e| format!("写入设置失败: {e}"))
+    std::fs::write(path, raw).map_err(|e| format!("写入设置失败: {e}"))?;
+
+    // hook 脚本/注册条目里的超时按 T+5/T+10 派生，时长变化时联动重写（幂等、自动备份）
+    if timeout_changed && confirm::hook_installed() {
+        confirm::set_hook(true)?;
+    }
+    Ok(())
 }
 
 /// 最近一次通知关联的会话（用于点通知后聚焦展开；10 分钟内有效，取用即清空）

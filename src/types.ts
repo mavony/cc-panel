@@ -55,6 +55,8 @@ export interface PanelSettings {
   notifyDone: boolean;
   /** 恢复会话使用的终端 App */
   terminalApp: "Terminal" | "iTerm";
+  /** 面板内确认的等待时长（秒），超时回落终端；后端 clamp 10–300 */
+  confirmTimeoutSecs: number;
 }
 
 /** 来自 PreToolUse hook 的待确认工具权限请求 */

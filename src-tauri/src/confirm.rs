@@ -23,10 +23,17 @@ use tauri::Manager;
 
 use crate::models::{now_ms, truncate_chars};
 
-/// 服务端等待面板决定的上限；hook 侧 nc 超时 50s、settings 中 hook timeout 55s，逐层兜底
-const DECIDE_TIMEOUT_SECS: u64 = 45;
 /// 拦截的工具（与 hook 安装时写入的 matcher 保持一致）
 const HOOK_MATCHER: &str = "Bash|Write|Edit|MultiEdit|NotebookEdit";
+
+/// 服务端等待面板决定的上限（用户可配，默认 45s）。
+/// hook 侧 nc 超时 = T+5、settings 中 hook timeout = T+10，逐层兜底
+fn decide_timeout_secs() -> u64 {
+    crate::load_panel_settings().confirm_timeout_secs.clamp(
+        *crate::CONFIRM_TIMEOUT_RANGE.start(),
+        *crate::CONFIRM_TIMEOUT_RANGE.end(),
+    )
+}
 
 #[derive(Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -213,7 +220,9 @@ fn handle_conn(stream: UnixStream, app: tauri::AppHandle) {
         crate::notify_mark(jsonl_key);
     }
 
-    let decision = rx.recv_timeout(Duration::from_secs(DECIDE_TIMEOUT_SECS)).ok();
+    let decision = rx
+        .recv_timeout(Duration::from_secs(decide_timeout_secs()))
+        .ok();
     if let Ok(mut map) = pending().lock() {
         map.remove(&id);
     }
@@ -325,15 +334,20 @@ fn allowlisted(tool_name: &str, input: &Value, cwd: &str) -> bool {
 
 // ---------- hook 安装/卸载（由用户在面板设置中显式触发） ----------
 
-const HOOK_SCRIPT: &str = r#"#!/bin/bash
+/// nc 超时 = 面板等待时长 + 5s，生成脚本时填入
+fn hook_script(nc_timeout: u64) -> String {
+    format!(
+        r#"#!/bin/bash
 # CC Panel 面板内确认 hook（由 CC Panel 设置页生成/移除）
 # 面板未运行或不可达时输出空并退出，Claude Code 走原生确认流程
 SOCK="$HOME/.cc_panel/confirm.sock"
 [ -S "$SOCK" ] || exit 0
-RESP=$({ cat; echo; } | /usr/bin/nc -U "$SOCK" -w 50 2>/dev/null)
+RESP=$({{ cat; echo; }} | /usr/bin/nc -U "$SOCK" -w {nc_timeout} 2>/dev/null)
 [ -n "$RESP" ] && printf '%s' "$RESP"
 exit 0
-"#;
+"#
+    )
+}
 
 fn claude_settings_path() -> Option<PathBuf> {
     Some(dirs::home_dir()?.join(".claude").join("settings.json"))
@@ -376,10 +390,12 @@ pub fn set_hook(enabled: bool) -> Result<bool, String> {
     let script = hook_script_path().ok_or("无法定位用户目录")?;
     let settings_path = claude_settings_path().ok_or("无法定位 ~/.claude")?;
 
+    let decide_timeout = decide_timeout_secs();
     if enabled {
         let dir = panel_dir().ok_or("无法定位用户目录")?;
         std::fs::create_dir_all(&dir).map_err(|e| format!("创建 ~/.cc_panel 失败: {e}"))?;
-        std::fs::write(&script, HOOK_SCRIPT).map_err(|e| format!("写入 hook 脚本失败: {e}"))?;
+        std::fs::write(&script, hook_script(decide_timeout + 5))
+            .map_err(|e| format!("写入 hook 脚本失败: {e}"))?;
         std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755))
             .map_err(|e| format!("设置脚本权限失败: {e}"))?;
     }
@@ -413,7 +429,7 @@ pub fn set_hook(enabled: bool) -> Result<bool, String> {
             "hooks": [{
                 "type": "command",
                 "command": script.to_string_lossy(),
-                "timeout": 55,
+                "timeout": decide_timeout + 10,
             }]
         }));
     }

@@ -26,6 +26,7 @@ export const usePanelStore = defineStore("panel", () => {
     notifyConfirm: true,
     notifyDone: true,
     terminalApp: "Terminal",
+    confirmTimeoutSecs: 45,
   });
   const resumeError = shallowRef<string | null>(null);
   const deleteError = shallowRef<string | null>(null);
