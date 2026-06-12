@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { onMounted, shallowRef } from "vue";
 
@@ -12,7 +13,15 @@ import { formatRelative } from "./utils/format";
 const store = usePanelStore();
 const now = useNow();
 
-onMounted(() => store.startPolling());
+/** 点通知/回到面板时由后端推送：聚焦展开对应会话 */
+const focusReq = shallowRef<{ path: string; ts: number } | null>(null);
+
+onMounted(() => {
+  store.startPolling();
+  listen<string>("focus-session", (e) => {
+    focusReq.value = { path: e.payload, ts: Date.now() };
+  });
+});
 
 const settingsOpen = shallowRef(false);
 const hookError = shallowRef<string | null>(null);
@@ -113,6 +122,7 @@ function startDrag(e: MouseEvent) {
         <SessionList
           :sessions="store.sessions"
           :now="now"
+          :focus="focusReq"
           @reveal="store.revealPath"
         />
       </main>

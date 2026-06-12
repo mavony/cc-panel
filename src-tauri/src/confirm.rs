@@ -190,6 +190,7 @@ fn handle_conn(stream: UnixStream, app: tauri::AppHandle) {
             format!("confirm:{id}"),
             "待确认（CC Panel）",
             &notify_body,
+            Some(transcript),
         );
     }
 

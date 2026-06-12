@@ -96,8 +96,40 @@ fn set_panel_settings(settings: PanelSettings) -> Result<(), String> {
     std::fs::write(path, raw).map_err(|e| format!("写入设置失败: {e}"))
 }
 
-/// 发系统通知（带系统提示音）。同一 key 在 10 分钟内去重。
-pub fn notify_dedup(app: &tauri::AppHandle, key: String, title: &str, body: &str) {
+/// 最近一次通知关联的会话（用于点通知后聚焦展开；10 分钟内有效，取用即清空）
+fn last_notified() -> &'static std::sync::Mutex<Option<(String, std::time::Instant)>> {
+    static LAST: std::sync::OnceLock<std::sync::Mutex<Option<(String, std::time::Instant)>>> =
+        std::sync::OnceLock::new();
+    LAST.get_or_init(|| std::sync::Mutex::new(None))
+}
+
+fn take_recent_notified() -> Option<String> {
+    let mut guard = last_notified().lock().ok()?;
+    let (path, at) = guard.take()?;
+    if at.elapsed() < std::time::Duration::from_secs(600) {
+        Some(path)
+    } else {
+        None
+    }
+}
+
+/// 把"最近通知的会话"推给前端聚焦展开（无待聚焦会话时为空操作）
+fn emit_focus_session(app: &tauri::AppHandle) {
+    if let Some(path) = take_recent_notified() {
+        use tauri::Emitter;
+        let _ = app.emit("focus-session", path);
+    }
+}
+
+/// 发系统通知（带系统提示音）。同一 key 在 10 分钟内去重；
+/// session 为通知关联的会话 jsonl 路径，用于点击通知后的聚焦联动。
+pub fn notify_dedup(
+    app: &tauri::AppHandle,
+    key: String,
+    title: &str,
+    body: &str,
+    session: Option<&str>,
+) {
     use std::collections::HashMap;
     use std::sync::{Mutex, OnceLock};
     use std::time::{Duration, Instant};
@@ -113,6 +145,12 @@ pub fn notify_dedup(app: &tauri::AppHandle, key: String, title: &str, body: &str
         }
         map.retain(|_, t| now.duration_since(*t) < Duration::from_secs(600));
         map.insert(key, now);
+    }
+
+    if let Some(path) = session {
+        if let Ok(mut guard) = last_notified().lock() {
+            *guard = Some((path.to_string(), std::time::Instant::now()));
+        }
     }
 
     use tauri_plugin_notification::NotificationExt;
@@ -217,6 +255,7 @@ fn watch_sessions(handle: tauri::AppHandle) {
                     format!("waiting:{path}"),
                     &format!("等待确认：{}", s.summary.title),
                     q,
+                    Some(path),
                 );
             }
             // running → recent：会话静默约 2 分钟，视为结束
@@ -226,6 +265,7 @@ fn watch_sessions(handle: tauri::AppHandle) {
                     format!("done:{path}"),
                     "会话结束",
                     &s.summary.title,
+                    Some(path),
                 );
             }
         }
@@ -274,7 +314,10 @@ pub fn run() {
                 .menu(&menu)
                 .show_menu_on_left_click(false)
                 .on_menu_event(|app, event| match event.id.as_ref() {
-                    "show" => show_main_window(app),
+                    "show" => {
+                        show_main_window(app);
+                        emit_focus_session(app);
+                    }
                     "quit" => app.exit(0),
                     _ => {}
                 })
@@ -296,12 +339,27 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| {
-            // 关窗只隐藏，应用常驻 tray
-            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                api.prevent_close();
-                let _ = window.hide();
+            use tauri::Manager as _;
+            match event {
+                // 关窗只隐藏，应用常驻 tray
+                tauri::WindowEvent::CloseRequested { api, .. } => {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
+                // 窗口获焦（含点通知激活应用后回到面板）时联动聚焦最近通知的会话
+                tauri::WindowEvent::Focused(true) => {
+                    emit_focus_session(window.app_handle());
+                }
+                _ => {}
             }
         })
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app, event| {
+            // 点通知/点 Dock 激活应用且无可见窗口时（macOS Reopen），亮出面板并聚焦会话
+            if let tauri::RunEvent::Reopen { .. } = event {
+                show_main_window(app);
+                emit_focus_session(app);
+            }
+        });
 }
