@@ -28,6 +28,7 @@ export const usePanelStore = defineStore("panel", () => {
     terminalApp: "Terminal",
   });
   const resumeError = shallowRef<string | null>(null);
+  const deleteError = shallowRef<string | null>(null);
 
   const runningCount = computed(
     () => sessions.value.filter((s) => s.status === "running").length,
@@ -166,6 +167,18 @@ export const usePanelStore = defineStore("panel", () => {
     }
   }
 
+  /** 会话管理页：删除会话（后端移到废纸篓）。成功返回 true，失败时原因放进 deleteError */
+  async function deleteSession(filePath: string): Promise<boolean> {
+    deleteError.value = null;
+    try {
+      await invoke("delete_session", { filePath });
+      return true;
+    } catch (e) {
+      deleteError.value = String(e);
+      return false;
+    }
+  }
+
   return {
     sessions,
     usages,
@@ -185,6 +198,8 @@ export const usePanelStore = defineStore("panel", () => {
     revealPath,
     resumeError,
     resumeSession,
+    deleteError,
+    deleteSession,
     fetchHistorySessions,
     fetchSessionMessages,
   };

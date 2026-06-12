@@ -234,6 +234,12 @@ async fn get_session_messages(
         .map_err(|_| "解析会话失败".to_string())?
 }
 
+/// 删除历史会话（移到废纸篓）。路径归属与"进行中"由后端独立校验。
+#[tauri::command]
+fn delete_session(file_path: String) -> Result<(), String> {
+    sources::history::delete(&file_path)
+}
+
 /// 在 Finder 中显示文件/目录。只接受真实存在的绝对路径。
 #[tauri::command]
 fn reveal_path(path: String) -> Result<(), String> {
@@ -261,6 +267,10 @@ pub fn debug_scan_codex() -> Vec<serde_json::Value> {
 
 pub fn debug_codex_usage() -> serde_json::Value {
     serde_json::to_value(sources::codex::usage()).unwrap_or_default()
+}
+
+pub fn debug_delete_session(file_path: &str) -> Result<(), String> {
+    sources::history::delete(file_path)
 }
 
 pub fn debug_resume_cmd(file_path: &str) -> Result<String, String> {
@@ -376,6 +386,7 @@ pub fn run() {
             resume_session,
             list_history_sessions,
             get_session_messages,
+            delete_session,
             list_pending_confirms,
             resolve_confirm,
             confirm_hook_status,

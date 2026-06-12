@@ -75,6 +75,21 @@ fn file_age(path: &Path) -> Option<u64> {
     Some(modified.elapsed().map(|d| d.as_secs()).unwrap_or(u64::MAX))
 }
 
+/// 删除会话：移到系统废纸篓（可恢复）。
+/// 路径归属校验复用 resume::parse_target（已知会话目录下的 .jsonl）；
+/// 进行中判定由服务端按 mtime 独立执行，不信任前端传来的状态
+pub fn delete(file_path: &str) -> Result<(), String> {
+    crate::resume::parse_target(file_path)?;
+    let path = Path::new(file_path)
+        .canonicalize()
+        .map_err(|_| "会话文件不存在")?;
+    let age = file_age(&path).ok_or("无法读取文件状态")?;
+    if age < RUNNING_SECS {
+        return Err("会话正在进行中，不能删除".into());
+    }
+    trash::delete(&path).map_err(|_| "移到废纸篓失败".to_string())
+}
+
 /// 分页列出历史会话；keyword 匹配标题或项目路径（不区分大小写），
 /// provider 为 "claude" / "codex" / None（全部）
 pub fn list(offset: usize, limit: usize, keyword: Option<&str>, provider: Option<&str>) -> Vec<HistorySession> {

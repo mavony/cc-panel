@@ -48,6 +48,7 @@ watch([keyword, providerFilter], () => {
 
 async function select(session: HistorySession) {
   selected.value = session;
+  deleteArmed.value = false;
   messagesLoading.value = true;
   messages.value = await store.fetchSessionMessages(session.filePath);
   messagesLoading.value = false;
@@ -60,6 +61,28 @@ async function resume() {
   resuming.value = true;
   await store.resumeSession(selected.value.filePath);
   resuming.value = false;
+}
+
+// 删除采用两段式确认：第一次点击进入待确认态，3 秒内再点才执行
+const deleteArmed = shallowRef(false);
+let deleteArmTimer: ReturnType<typeof setTimeout> | undefined;
+
+async function removeSession() {
+  if (!selected.value) return;
+  if (!deleteArmed.value) {
+    deleteArmed.value = true;
+    clearTimeout(deleteArmTimer);
+    deleteArmTimer = setTimeout(() => (deleteArmed.value = false), 3000);
+    return;
+  }
+  clearTimeout(deleteArmTimer);
+  deleteArmed.value = false;
+  const filePath = selected.value.filePath;
+  if (await store.deleteSession(filePath)) {
+    items.value = items.value.filter((s) => s.filePath !== filePath);
+    selected.value = null;
+    messages.value = [];
+  }
 }
 
 function roleLabel(role: ChatMessage["role"]) {
@@ -100,6 +123,10 @@ onMounted(() => load(true));
     <p v-if="store.resumeError" class="resume-error">
       恢复会话失败：{{ store.resumeError }}
       <button class="resume-error-close" @click="store.resumeError = null">✕</button>
+    </p>
+    <p v-if="store.deleteError" class="resume-error">
+      删除会话失败：{{ store.deleteError }}
+      <button class="resume-error-close" @click="store.deleteError = null">✕</button>
     </p>
 
     <div class="panes">
@@ -148,6 +175,15 @@ onMounted(() => load(true));
             </button>
             <button class="reveal-btn" @click="store.revealPath(selected.projectPath)">
               打开目录
+            </button>
+            <button
+              v-if="!selected.isActive"
+              class="delete-btn"
+              :class="{ 'is-armed': deleteArmed }"
+              :title="deleteArmed ? '再次点击确认删除（移到废纸篓，可恢复）' : '删除此会话（移到废纸篓）'"
+              @click="removeSession"
+            >
+              {{ deleteArmed ? "确认删除？" : "删除会话" }}
             </button>
           </div>
 
@@ -452,6 +488,28 @@ onMounted(() => load(true));
 
 .reveal-btn:hover {
   background: #1d222b;
+}
+
+.delete-btn {
+  flex-shrink: 0;
+  background: none;
+  border: 1px solid #262c36;
+  border-radius: 10px;
+  color: #b8bfc9;
+  font-size: 12px;
+  padding: 6px 12px;
+  cursor: pointer;
+}
+
+.delete-btn:hover {
+  border-color: #6b2a2a;
+  color: #e57373;
+}
+
+.delete-btn.is-armed {
+  background: #c0392b;
+  border-color: #c0392b;
+  color: #fff;
 }
 
 .messages {
