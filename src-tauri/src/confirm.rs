@@ -157,9 +157,15 @@ fn handle_conn(stream: UnixStream, app: tauri::AppHandle) {
         return reply(stream, "");
     }
 
+    // jsonl 链路对同一次停顿的启发式通知会用这个 key（文案逐字一致），
+    // hook 已提醒过的停顿据此压制，不同确认点互不影响
+    let jsonl_key = format!(
+        "waiting:{transcript}:可能在等待权限确认 — {}",
+        crate::sources::claude::describe_tool(tool_name, &tool_input)
+    );
+
     // 面板窗口不可见时不拦截：用户在终端工作，走原生提示零延迟。
-    // 但确认请求本身是准确信号，补发系统通知防止挂起无人知晓；
-    // key 与 jsonl 链路的 waiting 通知共用，同一停顿不重复打扰
+    // 但确认请求本身是准确信号，补发系统通知防止挂起无人知晓
     let visible = app
         .get_webview_window("main")
         .and_then(|w| w.is_visible().ok())
@@ -168,7 +174,7 @@ fn handle_conn(stream: UnixStream, app: tauri::AppHandle) {
         if crate::load_panel_settings().notify_confirm {
             crate::notify_dedup(
                 &app,
-                format!("waiting:{transcript}"),
+                jsonl_key,
                 "等待权限确认（CC Panel）",
                 &format!("{}: {}", tool_name, summarize(tool_name, &tool_input)),
                 Some(transcript),
@@ -203,6 +209,8 @@ fn handle_conn(stream: UnixStream, app: tauri::AppHandle) {
             &notify_body,
             Some(transcript),
         );
+        // 45s 超时回落终端后 jsonl 启发式可能再次命中同一停顿，预先压制
+        crate::notify_mark(jsonl_key);
     }
 
     let decision = rx.recv_timeout(Duration::from_secs(DECIDE_TIMEOUT_SECS)).ok();

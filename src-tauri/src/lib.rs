@@ -127,6 +127,20 @@ fn emit_focus_session(app: &tauri::AppHandle) {
 
 /// 发系统通知（带系统提示音）。同一 key 在 10 分钟内去重；
 /// session 为通知关联的会话 jsonl 路径，用于点击通知后的聚焦联动。
+fn dedup_map() -> &'static std::sync::Mutex<std::collections::HashMap<String, std::time::Instant>> {
+    static LAST: std::sync::OnceLock<
+        std::sync::Mutex<std::collections::HashMap<String, std::time::Instant>>,
+    > = std::sync::OnceLock::new();
+    LAST.get_or_init(|| std::sync::Mutex::new(std::collections::HashMap::new()))
+}
+
+/// 只登记去重 key 不发通知：同一停顿已由其他链路提醒过时，压制等价的后续通知
+pub fn notify_mark(key: String) {
+    if let Ok(mut map) = dedup_map().lock() {
+        map.insert(key, std::time::Instant::now());
+    }
+}
+
 pub fn notify_dedup(
     app: &tauri::AppHandle,
     key: String,
@@ -134,13 +148,9 @@ pub fn notify_dedup(
     body: &str,
     session: Option<&str>,
 ) {
-    use std::collections::HashMap;
-    use std::sync::{Mutex, OnceLock};
     use std::time::{Duration, Instant};
 
-    static LAST: OnceLock<Mutex<HashMap<String, Instant>>> = OnceLock::new();
-    let last = LAST.get_or_init(|| Mutex::new(HashMap::new()));
-    if let Ok(mut map) = last.lock() {
+    if let Ok(mut map) = dedup_map().lock() {
         let now = Instant::now();
         if let Some(t) = map.get(&key) {
             if now.duration_since(*t) < Duration::from_secs(600) {
@@ -274,7 +284,10 @@ pub fn debug_history_messages(
 
 /// 后台循环：刷新 tray 计数 + 状态变化通知（新 waiting / running→recent）
 fn watch_sessions(handle: tauri::AppHandle) {
-    let mut prev: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    // path → (status, pending_question)：通知判定需要同时感知状态跃迁
+    // 和"仍是 waiting 但停在了新的确认点上"（问题文案变化）
+    let mut prev: std::collections::HashMap<String, (String, Option<String>)> =
+        std::collections::HashMap::new();
     loop {
         let claude = sources::claude::scan_sessions();
         let codex = sources::codex::scan_sessions();
@@ -302,20 +315,25 @@ fn watch_sessions(handle: tauri::AppHandle) {
         for s in &sessions {
             let path = &s.summary.file_path;
             let status = s.summary.status.as_str();
-            let old = prev.get(path).map(String::as_str);
-            // 新进入 waiting：会话停在 AskUserQuestion / 计划批准上
-            if settings.notify_confirm && status == "waiting" && old != Some("waiting") {
-                let q = s.summary.pending_question.as_deref().unwrap_or("等待确认");
+            let question = &s.summary.pending_question;
+            let old = prev.get(path);
+            let old_status = old.map(|(st, _)| st.as_str());
+            // 新进入 waiting，或仍是 waiting 但停在了新的确认点上（问题变了）；
+            // 去重 key 含问题文案：同一会话的不同确认点各自独立去重
+            let newly_waiting = status == "waiting"
+                && (old_status != Some("waiting") || old.map(|(_, q)| q) != Some(question));
+            if settings.notify_confirm && newly_waiting {
+                let q = question.as_deref().unwrap_or("等待确认");
                 notify_dedup(
                     &handle,
-                    format!("waiting:{path}"),
+                    format!("waiting:{path}:{q}"),
                     &format!("等待确认：{}", s.summary.title),
                     q,
                     Some(path),
                 );
             }
             // running → recent：会话静默约 2 分钟，视为结束
-            if settings.notify_done && status == "recent" && old == Some("running") {
+            if settings.notify_done && status == "recent" && old_status == Some("running") {
                 notify_dedup(
                     &handle,
                     format!("done:{path}"),
@@ -327,7 +345,12 @@ fn watch_sessions(handle: tauri::AppHandle) {
         }
         prev = sessions
             .iter()
-            .map(|s| (s.summary.file_path.clone(), s.summary.status.clone()))
+            .map(|s| {
+                (
+                    s.summary.file_path.clone(),
+                    (s.summary.status.clone(), s.summary.pending_question.clone()),
+                )
+            })
             .collect();
 
         std::thread::sleep(std::time::Duration::from_secs(15));
